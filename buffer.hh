@@ -14,14 +14,14 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <iostream>
 #include "record.hh"
 
-using Byte = char;
 
 template<size_t _BufferSize>
 class Buffer {
     static_assert(_BufferSize >= sizeof(Record::data_t), "Buffer size has to be >= record size");
-    using Buffer_t = std::array<Byte, _BufferSize>;
+    using Buffer_t = std::array<uint8_t, _BufferSize>;
 public:
     enum class Mode {
         READ, WRITE
@@ -38,6 +38,7 @@ public:
     void ResetAndSetMode(Mode mode);
     size_t FreeBytes() const { return buffer_data.end() - buffer_iterator; }
     void Flush();
+    void PrintAllRecords();
 private:
     bool read_block();
     void write_block();
@@ -63,7 +64,7 @@ std::optional<Record> Buffer<_BufferSize>::ReadRecord() {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
     }
-    // TODO: Read record
+    // TODO: Allow buffer to be smaller than record
     /*
      * Cases:
      * 1. buffer contains enough bytes (eob_guard - buffer_iter >= sizeof), return record
@@ -81,7 +82,7 @@ std::optional<Record> Buffer<_BufferSize>::ReadRecord() {
     // buffer contains bytes partially, its needed to read new block
     if (eob_guard - buffer_iterator > 0 && eob_guard - buffer_iterator < sizeof(Record::data_t)) {
         if (file.eof()) { throw std::runtime_error("Buffer error: db file corrupted"); }
-        auto bytes = std::vector<char>();
+        auto bytes = std::vector<uint8_t>();
         bytes.reserve(sizeof(Record::data_t));
         auto bytesRead = eob_guard - buffer_iterator;
         std::copy(buffer_iterator, eob_guard, bytes.begin());
@@ -133,14 +134,14 @@ void Buffer<_BufferSize>::WriteRecord(Record const &record) {
 template<size_t _BufferSize>
 bool Buffer<_BufferSize>::read_block() {
     if (file.eof()) { return false; }
-    file.read(buffer_data.data(), buffer_data.size()); // care file with less bytes tha buffer size
+    file.read((char *) buffer_data.data(), buffer_data.size()); // care file with less bytes tha buffer size
     this->eob_guard = buffer_data.begin() + file.gcount();
     buffer_iterator = buffer_data.begin();
     return this->eob_guard > buffer_data.begin();
 }
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::write_block() {
-    file.write(buffer_data.data(), buffer_iterator - buffer_data.begin()).flush();
+    file.write((const char *) buffer_data.data(), buffer_iterator - buffer_data.begin()).flush();
     buffer_iterator = buffer_data.begin();
 }
 template<size_t _BufferSize>
@@ -157,5 +158,16 @@ Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) : file(),
 }
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::Flush() { if (buffer_iterator != buffer_data.begin()) { this->write_block(); }}
+
+// TODO: check if ResetAndSetMode is safe in this context
+template<size_t _BufferSize>
+void Buffer<_BufferSize>::PrintAllRecords() {
+    ResetAndSetMode(Mode::READ);
+    std::optional<Record> record;
+    std::cout << "ID\t\t\tOcena 1\t\tOcena 2\t\tOcena 3\t\tŚrednia\n"; // TODO: change that to use iomanip
+    while ((record = this->ReadRecord())) {
+        std::cout << *record << std::endl;
+    }
+}
 
 #endif //SBD_1_BUFFER_HH

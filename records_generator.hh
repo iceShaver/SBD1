@@ -10,13 +10,14 @@
 #include "buffer.hh"
 
 namespace RecordsGenerator {
+    // TODO: move it to the Record
     template<size_t _BufferSize>
     void Random(unsigned long long n, Buffer<_BufferSize> &buffer) {
         std::random_device rd;
         std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<> uid(2, 5);
-        for (int i = 0; i < n; ++i) {
-            buffer.WriteRecord({i, uid(gen), uid(gen), uid(gen)});
+        std::uniform_int_distribution<uint32_t> uid(2, 5);
+        for (auto i = 0u; i < n; ++i) {
+            buffer.WriteRecord({i, (uint8_t)uid(gen), (uint8_t)uid(gen), (uint8_t)uid(gen)});
         }
     }
 

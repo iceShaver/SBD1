@@ -10,32 +10,32 @@
 #include <array>
 #include <ostream>
 
+
 constexpr const int GRADES_NUMBER = 3;
 
 /*
- * Record contains:
- * studentID, three grades (1, 2, 3)
- * 26 bits,   6 bit
- * students: 67_108_864
- * grades: 2, 3, 4, 5
+ * Record contains (uint64_t):
+ * 40 bits student id, 8+8+8 bits for grades
+ * grade: 1-100 points
  */
 class Record final {
 public:
-    using data_t = uint32_t;
+    using data_t = uint64_t;
+    static constexpr const auto GRADE_MAX = 100u;
+    static constexpr const auto GRADE_MIN = 0u;
     //    Record() = delete;
 //    Record(Record const &) = delete;
 //    Record(Record &&) = delete;
 //    Record &operator=(Record const &) = delete;
 //    Record &operator=(Record &&) = delete;
     explicit Record(data_t data);
-    explicit Record(std::array<uint8_t, sizeof(data_t)> const &bytes) : Record(*(Record::data_t *) bytes.data()) {}
-    Record(uint32_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
+    Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
     ~Record() = default;
 
 
-    auto GetStudentId() const { return data >> 6; };
-    uint GetGrade(int gradeNumber) const;
-    auto GetAvg() const { return avg; }
+    uint64_t GetStudentId() const;
+    uint8_t GetGrade(int gradeNumber) const;
+    double GetAvg() const { return avg; }
     std::array<uint8_t, sizeof(data_t)> ToBytes() const;
     friend std::ostream &operator<<(std::ostream &os, const Record &record);
 private:

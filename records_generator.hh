@@ -15,9 +15,11 @@ namespace RecordsGenerator {
     void Random(unsigned long long n, Buffer<_BufferSize> &buffer) {
         std::random_device rd;
         std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint32_t> uid(2, 5);
+        std::uniform_int_distribution<uint32_t> uid(Record::GRADE_MIN, Record::GRADE_MAX);
         for (auto i = 0u; i < n; ++i) {
-            buffer.WriteRecord({i, (uint8_t)uid(gen), (uint8_t)uid(gen), (uint8_t)uid(gen)});
+            buffer.WriteRecord({i, static_cast<uint8_t>(uid(gen)),
+                                static_cast<uint8_t>(uid(gen)),
+                                static_cast<uint8_t>(uid(gen))});
         }
     }
 

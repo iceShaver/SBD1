@@ -5,38 +5,50 @@
 #include "record.hh"
 #include <exception>
 #include <stdexcept>
+#include <string>
 #include <cmath>
+#include <iomanip>
 
-uint Record::GetGrade(int gradeNumber) const {
+uint8_t Record::GetGrade(int gradeNumber) const {
     if (gradeNumber <= GRADES_NUMBER && gradeNumber > 0) {
-        return (uint) (((uint8_t) (((uint8_t) data) << (2 * gradeNumber))) >> 6) + 2;
+        return static_cast<uint8_t>(data >> (3 - gradeNumber) * 8);
     }
     throw std::invalid_argument("gradeNumber has to be <1, 3>");
 }
+
 Record::Record(data_t data) : data(data) { calcAvg(); }
+
 std::array<uint8_t, sizeof(Record::data_t)> Record::ToBytes() const {
     auto result = std::array<uint8_t, sizeof(data_t)>();
-    *((data_t *) result.data()) = data;
+    *reinterpret_cast<data_t *>(result.data()) = data;
     return result;
 }
-Record::Record(uint32_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3) {
-    if (student_id >= std::pow(2, 26)) { throw std::invalid_argument("student id over 2^26 (67108864)"); }
-    if (grade1 > 5 || grade2 > 5 || grade3 > 5 || grade1 < 2 || grade2 < 2 || grade3 < 2) {
-        throw std::invalid_argument("invalid grade, allowed: 2,3,4,5");
+
+Record::Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3) {
+    if (student_id >= std::pow(2, 40)) {
+        throw std::invalid_argument("student id over " + std::to_string(std::pow(2, 40)));
     }
-    grade1 -= 2;
-    grade2 -= 2;
-    grade3 -= 2;
-    data = grade3 | (grade2 << 2) | (grade1 << 4) | (student_id << 6);
+    if (grade1 > GRADE_MAX || grade2 > GRADE_MAX || grade3 > GRADE_MAX ||
+        grade1 < GRADE_MIN || grade2 < GRADE_MIN || grade3 < GRADE_MIN) {
+        throw std::invalid_argument("invalid grade used to instatiate record");
+    }
+    data = grade3 | grade2 << 8 | grade1 << 16 | student_id << 24;
     calcAvg();
 }
+
 void Record::calcAvg() {
     avg = 0;
     for (int i = 1; i <= GRADES_NUMBER; ++i) { avg += GetGrade(i); }
     avg /= (double) GRADES_NUMBER;
 }
+
 std::ostream &operator<<(std::ostream &os, const Record &record) {
-    const char * tabs = "\t\t\t";
-    return os << record.GetStudentId() << tabs << record.GetGrade(2) << tabs<< record.GetGrade(2) << tabs
-              << record.GetGrade(3) << tabs << record.GetAvg();
+    auto col_width = 20;
+    return os << std::setw(col_width) << record.GetStudentId()
+              << std::setw(col_width) << +record.GetGrade(1)
+              << std::setw(col_width) << +record.GetGrade(2)
+              << std::setw(col_width) << +record.GetGrade(3)
+              << std::setw(col_width) << std::setprecision(2) << std::fixed << record.GetAvg();
 }
+
+uint64_t Record::GetStudentId() const { return data >> 24; }

@@ -28,6 +28,9 @@ public:
     enum class Mode {
         READ, WRITE
     };
+    enum class PrintMode {
+        FULL, AVG_ONLY
+    };
 
     Buffer() = delete;
     Buffer(Buffer const &) = delete;
@@ -43,7 +46,7 @@ public:
     auto FreeBytes() const;
     auto RemainingBytes() const;
     void Flush();
-    void PrintAllRecords();
+    void PrintAllRecords(PrintMode printMode = PrintMode::FULL);
     friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 
 private:
@@ -184,7 +187,7 @@ void Buffer<_BufferSize>::Flush() {
 
 // TODO: check if ResetAndSetMode is safe in this context
 template<size_t _BufferSize>
-void Buffer<_BufferSize>::PrintAllRecords() {
+void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
     // make copy of all inner state variables
     this->Flush();
     auto f_g = this->file.tellg();
@@ -198,13 +201,27 @@ void Buffer<_BufferSize>::PrintAllRecords() {
     auto disk_writes_count = this->disk_writes_count;
     this->ResetAndSetMode(Mode::READ);
     auto col_width = 20;
-    std::cout << std::setw(col_width) << "ID"
-              << std::setw(col_width) << "Ocena 1"
-              << std::setw(col_width) << "Ocena 2"
-              << std::setw(col_width) << "Ocena 3"
-              << std::setw(col_width) << "Średnia" << '\n';
-    std::optional<Record> record;
-    while ((record = this->ReadRecord())) { std::cout << *record << '\n'; }
+    switch (printMode) {
+        case PrintMode::FULL: {
+            std::cout << std::setw(col_width) << "ID"
+                      << std::setw(col_width) << "Ocena 1"
+                      << std::setw(col_width) << "Ocena 2"
+                      << std::setw(col_width) << "Ocena 3"
+                      << std::setw(col_width) << "Średnia" << '\n';
+            std::optional<Record> record;
+
+            while ((record = this->ReadRecord())) { std::cout << *record << '\n'; }
+            break;
+        }
+        case PrintMode::AVG_ONLY:
+            std::optional<Record> record;
+            while ((record = this->ReadRecord())) {
+                std::cout << std::fixed << std::setprecision(2) << std::setw(5) << std::setfill('0') <<
+                          record->GetAvg() << ' ';
+            }
+            std::cout << '\n';
+            break;
+    }
     // restore all inner state variables
     if (mode == Mode::WRITE) {
         file.close();

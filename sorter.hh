@@ -35,33 +35,49 @@ namespace Sorter {
             }
             if (sorted) { break; }
             if constexpr (Config::DEBUG) {
-                buffer1.PrintAllRecords();
-                for (auto &&buf:buffers) { buf.PrintAllRecords(); }
+                buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY);
+                for (auto &&buf:buffers) { buf.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
             }
             // merge
             buffer1.ResetAndSetMode(Buffer<_BufferSize>::Mode::WRITE);
             for (auto &&buf:buffers) { buf.ResetAndSetMode(Buffer<_BufferSize>::Mode::READ); }
             auto a = buffers[0].ReadRecord();
             auto b = buffers[1].ReadRecord();
+            auto prev_a = std::optional<Record>{};
+            auto prev_b = std::optional<Record>{};
+            auto eor_a = false; // End Of Run
+            auto eor_b = false;
             while (true) {
-                if (a && b) {
+                prev_a = a;
+                prev_b = b;
+                if (eor_a && eor_b) {
+                    eor_a = eor_b = false;
+                } else if (a && !eor_a && b && !eor_b) {
                     if (a->GetAvg() < b->GetAvg()) {
                         buffer1.WriteRecord(*a);
                         a = buffers[0].ReadRecord();
+                        if (a->GetAvg() < prev_a->GetAvg()) { eor_a = true; }
                     } else {
                         buffer1.WriteRecord(*b);
                         b = buffers[1].ReadRecord();
+                        if (b->GetAvg() < prev_b->GetAvg()) { eor_b = true; }
                     }
-                } else if (a) {
+                } else if (a && !eor_a) {
                     buffer1.WriteRecord(*a);
                     a = buffers[0].ReadRecord();
-                } else if (b) {
+                    if (a->GetAvg() < prev_a->GetAvg()) { eor_a = true; }
+                } else if (b && !eor_b) {
                     buffer1.WriteRecord(*b);
                     b = buffers[1].ReadRecord();
+                    if (b->GetAvg() < prev_b->GetAvg()) { eor_b = true; }
+                } else if (a) {
+                    eor_a = false;
+                } else if (b) {
+                    eor_b = false;
                 } else break;
             }
         }
-        if constexpr (Config::DEBUG) { buffer1.PrintAllRecords(); }
+        if constexpr (Config::DEBUG) { buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
     }
 };
 

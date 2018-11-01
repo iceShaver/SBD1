@@ -15,6 +15,8 @@
 #include <iomanip>
 #include "record.hh"
 
+template<size_t _BufferSize> class Buffer;
+template<size_t _BufferSize> std::ostream &operator<<(std::ostream &, const Buffer<_BufferSize> &);
 
 template<size_t _BufferSize>
 class Buffer {
@@ -38,20 +40,22 @@ public:
     void WriteRecord(Record const &record);
     void ResetAndSetMode(Mode mode);
     auto FreeBytes() const;
-    auto RemainingBytes()const;
+    auto RemainingBytes() const;
     void Flush();
     void PrintAllRecords();
+    friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 
 private:
+    std::string path;
     std::fstream file;
     Mode mode;
     Buffer_t buffer_data;
     typename Buffer_t::iterator buffer_iterator;
     typename Buffer_t::iterator eob_guard;  // End of Buffer, used only in read mode
-
+    uint64_t disk_reads_count;
+    uint64_t disk_writes_count;
     bool read_block();
     void write_block();
-
 };
 
 template<size_t _BufferSize>
@@ -122,7 +126,8 @@ void Buffer<_BufferSize>::WriteRecord(Record const &record) {
 template<size_t _BufferSize>
 bool Buffer<_BufferSize>::read_block() {
     if (file.eof()) { return false; }
-    file.read((char *) buffer_data.data(), buffer_data.size()); // care file with less bytes tha buffer size
+    ++this->disk_reads_count;
+    file.read((char *) buffer_data.data(), buffer_data.size()); // care file with less bytes than buffer size
     this->eob_guard = buffer_data.begin() + file.gcount();
     buffer_iterator = buffer_data.begin();
     return this->eob_guard > buffer_data.begin();
@@ -130,6 +135,7 @@ bool Buffer<_BufferSize>::read_block() {
 
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::write_block() {
+    ++this->disk_writes_count;
     file.write((const char *) buffer_data.data(), buffer_iterator - buffer_data.begin()).flush();
     buffer_iterator = buffer_data.begin();
 }
@@ -139,11 +145,15 @@ Buffer<_BufferSize>::~Buffer() { this->Flush(); }
 
 template<size_t _BufferSize>
 Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
-        file(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc),
+        path(path),
+        file(path, std::ios::binary
+                   | std::ios::in | std::ios::out | std::ios::trunc), // TODO: fix it
         mode(mode),
         buffer_data(Buffer_t()),
         buffer_iterator(buffer_data.begin()),
-        eob_guard(buffer_data.begin()) {}
+        eob_guard(buffer_data.begin()),
+        disk_reads_count(0),
+        disk_writes_count(0) {}
 
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::Flush() { if (buffer_iterator != buffer_data.begin()) { this->write_block(); }}
@@ -151,7 +161,17 @@ void Buffer<_BufferSize>::Flush() { if (buffer_iterator != buffer_data.begin()) 
 // TODO: check if ResetAndSetMode is safe in this context
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::PrintAllRecords() {
-    ResetAndSetMode(Mode::READ);
+    // make copy of all inner state variables
+    auto f_g = this->file.tellg();
+    auto f_p = this->file.tellp();
+    auto f_state = this->file.rdstate();
+    auto buffer_data = this->buffer_data;
+    auto buffer_iterator_distance = this->buffer_iterator - this->buffer_data.begin();
+    auto eob_guard_distance = this->eob_guard - this->buffer_data.begin();
+    auto mode = this->mode;
+    auto disk_reads_count = this->disk_reads_count;
+    auto disk_writes_count = this->disk_writes_count;
+    this->ResetAndSetMode(Mode::READ);
     auto col_width = 20;
     std::cout << std::setw(col_width) << "ID"
               << std::setw(col_width) << "Ocena 1"
@@ -160,6 +180,17 @@ void Buffer<_BufferSize>::PrintAllRecords() {
               << std::setw(col_width) << "Średnia" << '\n';
     std::optional<Record> record;
     while ((record = this->ReadRecord())) { std::cout << *record << '\n'; }
+    // restore all inner state variables
+    this->file.clear();
+    this->file.seekg(f_g);
+    this->file.seekp(f_p);
+    this->file.setstate(f_state);
+    this->buffer_data = buffer_data;
+    this->buffer_iterator = this->buffer_data.begin() + buffer_iterator_distance;
+    this->eob_guard = this->buffer_data.begin() + eob_guard_distance;
+    this->mode = mode;
+    this->disk_reads_count = disk_reads_count;
+    this->disk_writes_count = disk_writes_count;
 }
 
 template<size_t _BufferSize>
@@ -171,6 +202,10 @@ template<size_t _BufferSize>
 auto Buffer<_BufferSize>::RemainingBytes() const {
     auto result = eob_guard - buffer_iterator;
     return static_cast<long unsigned>(result > 0 ? result : 0);
+}
+template<size_t _BufferSize>
+std::ostream &operator<<(std::ostream &os, const Buffer<_BufferSize> &buffer) {
+    return os << "Reads count: " << buffer.disk_reads_count << "\nWritesCount: " << buffer.disk_writes_count;
 }
 
 #endif //SBD_1_BUFFER_HH

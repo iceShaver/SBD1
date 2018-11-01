@@ -16,6 +16,7 @@
 #include "record.hh"
 
 template<size_t _BufferSize> class Buffer;
+
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &, const Buffer<_BufferSize> &);
 
 template<size_t _BufferSize>
@@ -37,7 +38,7 @@ public:
     explicit Buffer(const char *path, Mode mode);
 
     auto ReadRecord() -> std::optional<Record>;
-    void WriteRecord(Record const &record);
+    Buffer &WriteRecord(Record const &record);
     void ResetAndSetMode(Mode mode);
     auto FreeBytes() const;
     auto RemainingBytes() const;
@@ -62,9 +63,19 @@ template<size_t _BufferSize>
 void Buffer<_BufferSize>::ResetAndSetMode(Mode mode) {
     this->Flush();
     eob_guard = buffer_iterator = buffer_data.begin();
-    file.seekg(0, std::ios::beg);
-    file.seekp(0, std::ios::beg);
     file.clear();
+    file.close();
+    switch (mode) {
+        case Mode::READ:
+            file.open(path, std::ios::binary | std::ios::in);
+            break;
+        case Mode::WRITE:
+            file.open(path, std::ios::binary | std::ios::out | std::ios::trunc);
+            break;
+    }
+/*    file.clear();
+    file.seekg(0, std::ios::beg);
+    file.seekp(0, std::ios::beg);*/
     this->mode = mode;
 }
 template<size_t _BufferSize>
@@ -98,14 +109,14 @@ auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
 }
 
 template<size_t _BufferSize>
-void Buffer<_BufferSize>::WriteRecord(Record const &record) {
+Buffer<_BufferSize> &Buffer<_BufferSize>::WriteRecord(Record const &record) {
     if (mode != Mode::WRITE) {
         throw std::runtime_error("In order to write record you have to set buffer to writing mode");
     }
     if (FreeBytes() >= sizeof(Record::data_t)) { // buffer contains enough space
         auto bytes = record.ToBytes();
         buffer_iterator = std::copy(bytes.begin(), bytes.end(), buffer_iterator);
-        return;
+        return *this;
     }
     if (FreeBytes() > 0 && FreeBytes() < sizeof(Record::data_t)) { // buffer contains space partially
         auto bytes = record.ToBytes();
@@ -113,12 +124,12 @@ void Buffer<_BufferSize>::WriteRecord(Record const &record) {
         buffer_iterator = std::copy(bytes.begin(), bytes.begin() + bytesCopied, buffer_iterator); // write first part
         this->write_block();
         buffer_iterator = std::copy(bytes.begin() + bytesCopied, bytes.end(), buffer_iterator);   // write second part
-        return;
+        return *this;
     }
     if (buffer_iterator == buffer_data.end()) { // buffer contains no space
         this->write_block();
         this->WriteRecord(record);
-        return;
+        return *this;
     }
     throw std::runtime_error("Unable to write record, internal buffer error");
 }
@@ -146,22 +157,36 @@ Buffer<_BufferSize>::~Buffer() { this->Flush(); }
 template<size_t _BufferSize>
 Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
         path(path),
-        file(path, std::ios::binary
-                   | std::ios::in | std::ios::out | std::ios::trunc), // TODO: fix it
+        // TODO: fix it
         mode(mode),
         buffer_data(Buffer_t()),
         buffer_iterator(buffer_data.begin()),
         eob_guard(buffer_data.begin()),
         disk_reads_count(0),
-        disk_writes_count(0) {}
+        disk_writes_count(0) {
+    switch (mode) {
+        case Mode::READ:
+            file.open(path, std::ios::binary | std::ios::in);
+            break;
+        case Mode::WRITE:
+            file.open(path, std::ios::binary | std::ios::out | std::ios::trunc);
+            break;
+    }
+
+}
 
 template<size_t _BufferSize>
-void Buffer<_BufferSize>::Flush() { if (buffer_iterator != buffer_data.begin()) { this->write_block(); }}
+void Buffer<_BufferSize>::Flush() {
+    if (buffer_iterator != buffer_data.begin()) {
+        this->write_block();
+    }
+}
 
 // TODO: check if ResetAndSetMode is safe in this context
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::PrintAllRecords() {
     // make copy of all inner state variables
+    this->Flush();
     auto f_g = this->file.tellg();
     auto f_p = this->file.tellp();
     auto f_state = this->file.rdstate();
@@ -181,7 +206,11 @@ void Buffer<_BufferSize>::PrintAllRecords() {
     std::optional<Record> record;
     while ((record = this->ReadRecord())) { std::cout << *record << '\n'; }
     // restore all inner state variables
-    this->file.clear();
+    if (mode == Mode::WRITE) {
+        file.close();
+        file.clear();
+        file.open(path, std::ios::binary | std::ios::out | std::ios::app);
+    }
     this->file.seekg(f_g);
     this->file.seekp(f_p);
     this->file.setstate(f_state);

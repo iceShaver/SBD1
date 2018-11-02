@@ -14,23 +14,21 @@
 #include <vector>
 #include <iomanip>
 #include "record.hh"
+#include <filesystem>
 
 template<size_t _BufferSize> class Buffer;
 
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &, const Buffer<_BufferSize> &);
+namespace fs = std::filesystem;
 
 template<size_t _BufferSize>
-class Buffer {
+class Buffer final {
     static_assert(_BufferSize >= sizeof(Record::data_t), "Buffer size has to be >= record size");
     using Buffer_t = std::array<uint8_t, _BufferSize>;
 
 public:
-    enum class Mode {
-        READ, WRITE
-    };
-    enum class PrintMode {
-        FULL, AVG_ONLY
-    };
+    enum class Mode { READ, WRITE };
+    enum class PrintMode { FULL, AVG_ONLY };
 
     Buffer() = delete;
     Buffer(Buffer const &) = delete;
@@ -50,7 +48,7 @@ public:
     friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 
 private:
-    std::string path;
+    fs::path path;
     std::fstream file;
     Mode mode;
     Buffer_t buffer_data;
@@ -62,27 +60,16 @@ private:
     void write_block();
 };
 
-template<size_t _BufferSize>
-void Buffer<_BufferSize>::ResetAndSetMode(Mode mode) {
+template<size_t _BufferSize> void Buffer<_BufferSize>::ResetAndSetMode(Mode mode) {
     this->Flush();
     eob_guard = buffer_iterator = buffer_data.begin();
     file.clear();
-    file.close();
-    switch (mode) {
-        case Mode::READ:
-            file.open(path, std::ios::binary | std::ios::in);
-            break;
-        case Mode::WRITE:
-            file.open(path, std::ios::binary | std::ios::out | std::ios::trunc);
-            break;
-    }
-/*    file.clear();
-    file.seekg(0, std::ios::beg);
-    file.seekp(0, std::ios::beg);*/
+    if (mode == Buffer::Mode::WRITE) { fs::resize_file(path, 0); }
+    file.seekg(0);
+    file.seekp(0);
     this->mode = mode;
 }
-template<size_t _BufferSize>
-auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
+template<size_t _BufferSize> auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
     }
@@ -111,8 +98,7 @@ auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
     return std::nullopt;
 }
 
-template<size_t _BufferSize>
-Buffer<_BufferSize> &Buffer<_BufferSize>::WriteRecord(Record const &record) {
+template<size_t _BufferSize> Buffer<_BufferSize> &Buffer<_BufferSize>::WriteRecord(Record const &record) {
     if (mode != Mode::WRITE) {
         throw std::runtime_error("In order to write record you have to set buffer to writing mode");
     }
@@ -137,8 +123,7 @@ Buffer<_BufferSize> &Buffer<_BufferSize>::WriteRecord(Record const &record) {
     throw std::runtime_error("Unable to write record, internal buffer error");
 }
 
-template<size_t _BufferSize>
-bool Buffer<_BufferSize>::read_block() {
+template<size_t _BufferSize> bool Buffer<_BufferSize>::read_block() {
     if (file.eof()) { return false; }
     ++this->disk_reads_count;
     file.read((char *) buffer_data.data(), buffer_data.size()); // care file with less bytes than buffer size
@@ -147,40 +132,34 @@ bool Buffer<_BufferSize>::read_block() {
     return this->eob_guard > buffer_data.begin();
 }
 
-template<size_t _BufferSize>
-void Buffer<_BufferSize>::write_block() {
+template<size_t _BufferSize> void Buffer<_BufferSize>::write_block() {
     ++this->disk_writes_count;
     file.write((const char *) buffer_data.data(), buffer_iterator - buffer_data.begin()).flush();
     buffer_iterator = buffer_data.begin();
 }
 
-template<size_t _BufferSize>
-Buffer<_BufferSize>::~Buffer() { this->Flush(); }
+template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() { this->Flush(); }
 
-template<size_t _BufferSize>
-Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
+template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
         path(path),
-        // TODO: fix it
+        file(path, std::ios::binary | std::ios::in | std::ios::out),
         mode(mode),
         buffer_data(Buffer_t()),
         buffer_iterator(buffer_data.begin()),
         eob_guard(buffer_data.begin()),
         disk_reads_count(0),
         disk_writes_count(0) {
-    switch (mode) {
-        case Mode::READ:
-            file.open(path, std::ios::binary | std::ios::in);
-            break;
-        case Mode::WRITE:
-            file.open(path, std::ios::binary | std::ios::out | std::ios::trunc);
-            break;
+    file.exceptions(std::ios::badbit);
+    if (mode == Buffer::Mode::WRITE) {
+        fs::resize_file(this->path, 0);
+        file.seekg(0);
+        file.seekp(0);
     }
-
 }
 
 template<size_t _BufferSize>
 void Buffer<_BufferSize>::Flush() {
-    if (buffer_iterator != buffer_data.begin()) {
+    if (mode == Buffer::Mode::WRITE && buffer_iterator != buffer_data.begin()) {
         this->write_block();
     }
 }
@@ -223,11 +202,6 @@ void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
             break;
     }
     // restore all inner state variables
-    if (mode == Mode::WRITE) {
-        file.close();
-        file.clear();
-        file.open(path, std::ios::binary | std::ios::out | std::ios::app);
-    }
     this->file.seekg(f_g);
     this->file.seekp(f_p);
     this->file.setstate(f_state);

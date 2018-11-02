@@ -13,8 +13,8 @@
 namespace Sorter {
     template<size_t _BufferSize> void natural_merge_sort_2_1(Buffer<_BufferSize> &buffer1) {
         auto buffers = std::array{ // TODO: change file paths to tmp files
-                Buffer<_BufferSize>("./buf02", Buffer<_BufferSize>::Mode::WRITE),
-                Buffer<_BufferSize>("./buf03", Buffer<_BufferSize>::Mode::WRITE)
+                Buffer<_BufferSize>(Buffer<_BufferSize>::Mode::WRITE),
+                Buffer<_BufferSize>(Buffer<_BufferSize>::Mode::WRITE)
         };
         while (true) {
             buffer1.ResetAndSetMode(Buffer<_BufferSize>::Mode::READ);

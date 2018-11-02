@@ -21,8 +21,7 @@ template<size_t _BufferSize> class Buffer;
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &, const Buffer<_BufferSize> &);
 namespace fs = std::filesystem;
 
-template<size_t _BufferSize>
-class Buffer final {
+template<size_t _BufferSize> class Buffer final {
     static_assert(_BufferSize >= sizeof(Record::data_t), "Buffer size has to be >= record size");
     using Buffer_t = std::array<uint8_t, _BufferSize>;
 
@@ -32,11 +31,12 @@ public:
 
     Buffer() = delete;
     Buffer(Buffer const &) = delete;
-    Buffer(Buffer &&) = delete;
+    Buffer(Buffer &&) = default;
     Buffer &operator=(Buffer const &) = delete;
-    Buffer &operator=(Buffer &&) = delete;
+    Buffer &operator=(Buffer &&) = default;
     ~Buffer();
-    explicit Buffer(const char *path, Mode mode);
+    Buffer(const char *path, Mode mode);
+    explicit Buffer(Mode mode);
 
     auto ReadRecord() -> std::optional<Record>;
     Buffer &WriteRecord(Record const &record);
@@ -56,6 +56,8 @@ private:
     typename Buffer_t::iterator eob_guard;  // End of Buffer, used only in read mode
     uint64_t disk_reads_count;
     uint64_t disk_writes_count;
+    bool persistent_file;
+
     bool read_block();
     void write_block();
 };
@@ -69,6 +71,7 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::ResetAndSetMode(Mode mode
     file.seekp(0);
     this->mode = mode;
 }
+
 template<size_t _BufferSize> auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
@@ -138,17 +141,22 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::write_block() {
     buffer_iterator = buffer_data.begin();
 }
 
-template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() { this->Flush(); }
+template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() {
+    this->Flush();
+    file.close();
+    if (!persistent_file) fs::remove(path);
+}
 
 template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
         path(path),
-        file(path, std::ios::binary | std::ios::in | std::ios::out),
+        file(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::app),
         mode(mode),
         buffer_data(Buffer_t()),
         buffer_iterator(buffer_data.begin()),
         eob_guard(buffer_data.begin()),
         disk_reads_count(0),
-        disk_writes_count(0) {
+        disk_writes_count(0),
+        persistent_file(true) {
     file.exceptions(std::ios::badbit);
     if (mode == Buffer::Mode::WRITE) {
         fs::resize_file(this->path, 0);
@@ -156,17 +164,19 @@ template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffe
         file.seekp(0);
     }
 }
-
+// TODO: check if constructing fs::path with mutable char* is safe
 template<size_t _BufferSize>
-void Buffer<_BufferSize>::Flush() {
+Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(::tmpnam(nullptr), mode) {
+    persistent_file = false;
+}
+
+template<size_t _BufferSize> void Buffer<_BufferSize>::Flush() {
     if (mode == Buffer::Mode::WRITE && buffer_iterator != buffer_data.begin()) {
         this->write_block();
     }
 }
 
-// TODO: check if ResetAndSetMode is safe in this context
-template<size_t _BufferSize>
-void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
+template<size_t _BufferSize> void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
     // make copy of all inner state variables
     this->Flush();
     auto f_g = this->file.tellg();
@@ -213,19 +223,19 @@ void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
     this->disk_writes_count = disk_writes_count;
 }
 
-template<size_t _BufferSize>
-auto Buffer<_BufferSize>::FreeBytes() const {
+template<size_t _BufferSize> auto Buffer<_BufferSize>::FreeBytes() const {
     auto result = buffer_data.end() - buffer_iterator;
     return static_cast<long unsigned>(result > 0 ? result : 0);
 }
-template<size_t _BufferSize>
-auto Buffer<_BufferSize>::RemainingBytes() const {
+
+template<size_t _BufferSize> auto Buffer<_BufferSize>::RemainingBytes() const {
     auto result = eob_guard - buffer_iterator;
     return static_cast<long unsigned>(result > 0 ? result : 0);
 }
-template<size_t _BufferSize>
-std::ostream &operator<<(std::ostream &os, const Buffer<_BufferSize> &buffer) {
+
+template<size_t _BufferSize> std::ostream &operator<<(std::ostream &os, const Buffer<_BufferSize> &buffer) {
     return os << "Reads count: " << buffer.disk_reads_count << "\nWritesCount: " << buffer.disk_writes_count;
 }
+
 
 #endif //SBD_1_BUFFER_HH

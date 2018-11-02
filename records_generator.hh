@@ -13,16 +13,23 @@ namespace RecordsGenerator {
     // TODO: move it to the Record
     template<size_t _BufferSize>
     void Random(unsigned long long n, Buffer<_BufferSize> &buffer) {
-        std::random_device rd;
-        std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint32_t> uid(Record::GRADE_MIN, Record::GRADE_MAX);
         for (auto i = 0u; i < n; ++i) {
-            buffer.WriteRecord({i, static_cast<uint8_t>(uid(gen)),
-                                static_cast<uint8_t>(uid(gen)),
-                                static_cast<uint8_t>(uid(gen))});
+            buffer.WriteRecord(Record::Random());
         }
     }
-
+    template<size_t _BufferSize> void ReadFromKeyboard(Buffer<_BufferSize> &buffer) {
+        std::cout << "\nWpisz Ocena1 Ocena2 Ocena3, ctrl+d aby zakończyć\n";
+        unsigned a, b, c;
+        while (true) {
+            std::cin >> a >> b >> c;
+            if (std::cin.eof())break;
+            auto record = Record{static_cast<uint8_t>(a), static_cast<uint8_t>(b), static_cast<uint8_t>(c)};
+            buffer.WriteRecord(record);
+            std::cout <<"Zapisano: " <<  record << std::endl;
+        }
+        std::cout << "Wpisane rekordy:\n";
+        buffer.PrintAllRecords(Buffer<_BufferSize>::PrintMode::FULL);
+    }
 }
 
 

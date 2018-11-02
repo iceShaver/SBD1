@@ -36,6 +36,8 @@ Record::Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grad
     calcAvg();
 }
 
+Record::Record(uint8_t grade1, uint8_t grade2, uint8_t grade3) : Record(record_id_counter++, grade1, grade2, grade3) {}
+
 void Record::calcAvg() {
     avg = 0;
     for (int i = 1; i <= GRADES_NUMBER; ++i) { avg += GetGrade(i); }
@@ -52,3 +54,7 @@ std::ostream &operator<<(std::ostream &os, const Record &record) {
 }
 
 uint64_t Record::GetStudentId() const { return data >> 24; }
+
+Record Record::Random() {
+    return Record{static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen))};
+}

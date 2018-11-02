@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <array>
 #include <ostream>
+#include <random>
 
 
 constexpr const int GRADES_NUMBER = 3;
@@ -21,15 +22,16 @@ constexpr const int GRADES_NUMBER = 3;
 class Record final {
 public:
     using data_t = uint64_t;
-    static constexpr const auto GRADE_MAX = 100u;
-    static constexpr const auto GRADE_MIN = 0u;
+    static constexpr auto const GRADE_MAX = 100u;
+    static constexpr auto const GRADE_MIN = 0u;
     //    Record() = delete;
 //    Record(Record const &) = delete;
 //    Record(Record &&) = delete;
 //    Record &operator=(Record const &) = delete;
 //    Record &operator=(Record &&) = delete;
     explicit Record(data_t data);
-    Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
+
+    Record(uint8_t grade1, uint8_t grade2, uint8_t grade3);
     ~Record() = default;
 
 
@@ -38,10 +40,17 @@ public:
     double GetAvg() const { return avg; }
     std::array<uint8_t, sizeof(data_t)> ToBytes() const;
     friend std::ostream &operator<<(std::ostream &os, const Record &record);
+
+    static Record Random();
 private:
+    Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
+    inline static uint64_t record_id_counter = 0;
     void calcAvg();
     data_t data;
     float avg;
+    inline static std::random_device rd{};
+    inline static std::mt19937_64 gen = std::mt19937_64{rd()};
+    inline static std::uniform_int_distribution<> uid{GRADE_MIN, GRADE_MAX};
 };
 
 #endif //SBD_1_RECORD_HH

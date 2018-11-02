@@ -12,9 +12,9 @@
 
 namespace Sorter {
     template<size_t _BufferSize> void natural_merge_sort_2_1(Buffer<_BufferSize> &buffer1) {
-        auto buffers = std::array{
-                Buffer<_BufferSize>("/home/kamil/Desktop/buf02", Buffer<_BufferSize>::Mode::WRITE),
-                Buffer<_BufferSize>("/home/kamil/Desktop/buf03", Buffer<_BufferSize>::Mode::WRITE)
+        auto buffers = std::array{ // TODO: change file paths to tmp files
+                Buffer<_BufferSize>("./buf02", Buffer<_BufferSize>::Mode::WRITE),
+                Buffer<_BufferSize>("./buf03", Buffer<_BufferSize>::Mode::WRITE)
         };
         while (true) {
             buffer1.ResetAndSetMode(Buffer<_BufferSize>::Mode::READ);
@@ -79,7 +79,11 @@ namespace Sorter {
         }
         if constexpr (Config::DEBUG) { buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
     }
-};
+
+    template <size_t _BufferSize> void polyphase_sort_3(Buffer<_BufferSize> &buffer1){
+
+    }
+}
 
 
 #endif //SBD_1_SORTER_HH

@@ -7,12 +7,13 @@
 /*
  * WARNING: Program is currently valid only for LE machines
  */
-using buffer_t = Buffer<4096 * 64>;
+using Buffer_t = Buffer<4096 * 64>;
 int main() {
     using std::cout;
     using std::endl;
-    buffer_t buf("/home/kamil/Desktop/buf01", buffer_t::Mode::WRITE);
+    Buffer_t buf("./buf01", Buffer_t::Mode::WRITE);
     RecordsGenerator::Random(/*67'108'864*/ 7, buf);
+    RecordsGenerator::ReadFromKeyboard(buf);
     Sorter::natural_merge_sort_2_1(buf);
     return 0;
 }

@@ -14,6 +14,7 @@
 #include <vector>
 #include <iomanip>
 #include "record.hh"
+#include "config.hh"
 #include <filesystem>
 
 template<size_t _BufferSize> class Buffer;
@@ -31,20 +32,23 @@ public:
 
     Buffer() = delete;
     Buffer(Buffer const &) = delete;
-    Buffer(Buffer &&) = default;
+    Buffer(Buffer &&)noexcept = default;
     Buffer &operator=(Buffer const &) = delete;
-    Buffer &operator=(Buffer &&) = default;
+    Buffer &operator=(Buffer &&)noexcept = default ;
     ~Buffer();
-    Buffer(const char *path, Mode mode);
+    Buffer(const char *path, Mode mode, bool persistent_file = true);
     explicit Buffer(Mode mode);
 
-    auto ReadRecord() -> std::optional<Record>;
+    std::optional<Record> ReadRecord();
     Buffer &WriteRecord(Record const &record);
     void ResetAndSetMode(Mode mode);
     auto FreeBytes() const;
     auto RemainingBytes() const;
     void Flush();
     void PrintAllRecords(PrintMode printMode = PrintMode::FULL);
+    auto reads_count() const { return disk_reads_count; }
+    auto writes_count() const { return disk_writes_count; }
+    void reset_io_counters() { disk_reads_count = disk_writes_count = 0; }
     friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 
 private:
@@ -72,7 +76,7 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::ResetAndSetMode(Mode mode
     this->mode = mode;
 }
 
-template<size_t _BufferSize> auto Buffer<_BufferSize>::ReadRecord() -> std::optional<Record> {
+template<size_t _BufferSize> std::optional<Record> Buffer<_BufferSize>::ReadRecord()  {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
     }
@@ -147,7 +151,7 @@ template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() {
     if (!persistent_file) fs::remove(path);
 }
 
-template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode) :
+template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode, bool persistent_file) :
         path(path),
         file(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::app),
         mode(mode),
@@ -156,19 +160,21 @@ template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffe
         eob_guard(buffer_data.begin()),
         disk_reads_count(0),
         disk_writes_count(0),
-        persistent_file(true) {
+        persistent_file(persistent_file) {
     file.exceptions(std::ios::badbit);
     if (mode == Buffer::Mode::WRITE) {
         fs::resize_file(this->path, 0);
         file.seekg(0);
         file.seekp(0);
     }
+    if (Config::verbose) {
+        std::cout << "Buffer file path" << ((persistent_file) ? " (persistent): " : ": ") << fs::absolute(this->path)
+                  << std::endl;
+    }
 }
 // TODO: check if constructing fs::path with mutable char* is safe
 template<size_t _BufferSize>
-Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(::tmpnam(nullptr), mode) {
-    persistent_file = false;
-}
+Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(::tmpnam(nullptr), mode, false) {}
 
 template<size_t _BufferSize> void Buffer<_BufferSize>::Flush() {
     if (mode == Buffer::Mode::WRITE && buffer_iterator != buffer_data.begin()) {

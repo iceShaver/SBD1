@@ -28,7 +28,6 @@ namespace RecordsGenerator {
     }
 
     template<size_t _BufferSize> void from_keyboard(Buffer<_BufferSize> &buffer) {
-        cout << "\nWpisz Ocena1 Ocena2 Ocena3, ctrl+d aby zakończyć\n";
         unsigned a, b, c;
         while (true) {
             cin >> a >> b >> c;
@@ -36,20 +35,17 @@ namespace RecordsGenerator {
             try {
                 auto record = Record{static_cast<uint8_t>(a), static_cast<uint8_t>(b), static_cast<uint8_t>(c)};
                 buffer.WriteRecord(record);
-                cout << "Zapisano: " << record << endl;
-            }catch (std::invalid_argument &e){
+                cout << "Saved record: " << record << endl;
+            } catch (std::invalid_argument &e) {
                 cerr << "Error while creating record: " << e.what() << endl;
             }
 
 
         }
-        cout << "Wpisane rekordy:\n";
-        buffer.PrintAllRecords(Buffer<_BufferSize>::PrintMode::FULL);
     }
 
     template<size_t _BufferSize> void from_csv_file(Buffer<_BufferSize> &buffer, fs::path const &file_path) {
         auto file = fstream(file_path, ios::in);
-
         auto to_record = [](auto str) {
             auto result = std::vector<string>(3);
             boost::split(result, str, boost::is_any_of(","));

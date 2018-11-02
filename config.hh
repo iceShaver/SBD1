@@ -5,7 +5,7 @@
 #ifndef SBD_1_CONFIG_HH
 #define SBD_1_CONFIG_HH
 namespace Config {
-    constexpr auto const DEBUG = true;
+    auto debug = false;
     auto verbose = false;
 }
 #endif //SBD_1_CONFIG_HH

@@ -19,7 +19,7 @@ namespace RecordsGenerator {
     using std::cout, std::cerr, std::cin, std::endl, std::string, std::fstream,
     std::ios;
     namespace fs = std::filesystem;
-
+    enum class Source { RANDOM, USER_INPUT, CSV_FILE };
 
     template<size_t _BufferSize> void random(unsigned long long n, Buffer<_BufferSize> &buffer) {
         for (auto i = 0u; i < n; ++i) {

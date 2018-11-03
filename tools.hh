@@ -1,0 +1,23 @@
+//
+// Created by kamil on 03.11.18.
+//
+
+#ifndef SBD_1_TOOLS_HH
+#define SBD_1_TOOLS_HH
+
+#include <functional>
+#include "config.hh"
+
+template<typename _T>
+void verbose(_T f) {
+    if (Config::verbose)
+        std::invoke(f);
+}
+
+template<typename _T>
+void debug(_T f) {
+    if (Config::debug)
+        std::invoke(f);
+}
+
+#endif //SBD_1_TOOLS_HH

@@ -15,6 +15,7 @@
 #include <iomanip>
 #include "record.hh"
 #include "config.hh"
+#include "tools.hh"
 #include <filesystem>
 
 template<size_t _BufferSize> class Buffer;
@@ -33,11 +34,11 @@ public:
 
     Buffer() = delete;
     Buffer(Buffer const &) = delete;
-    Buffer(Buffer &&)noexcept = default;
+    Buffer(Buffer &&) noexcept = default;
     Buffer &operator=(Buffer const &) = delete;
-    Buffer &operator=(Buffer &&)noexcept = default ;
+    Buffer &operator=(Buffer &&) noexcept = default;
     ~Buffer();
-    Buffer(const char *path, Mode mode, bool persistent_file = true);
+    Buffer(fs::path const &path, Mode mode, bool persistent_file = true);
     explicit Buffer(Mode mode);
 
     std::optional<Record> read_record();
@@ -47,9 +48,11 @@ public:
     auto remaining_bytes() const;
     void flush();
     void print_all_records(PrintMode printMode = PrintMode::FULL);
-    auto reads_count() const { return disk_reads_count; }
-    auto writes_count() const { return disk_writes_count; }
-    void reset_io_counters() { disk_reads_count = disk_writes_count = 0; }
+    auto get_disk_reads_count() const { return disk_reads_count; }
+    auto get_disk_writes_count() const { return disk_writes_count; }
+    auto get_records_reads_count() const { return records_reads_count; }
+    auto get_records_writes_count() const { return records_writes_count; }
+    void reset_io_counters() { records_reads_count = records_writes_count = disk_reads_count = disk_writes_count = 0; }
     friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 
 private:
@@ -61,6 +64,8 @@ private:
     typename Buffer_t::iterator eob_guard;  // End of Buffer, used only in read mode
     uint64_t disk_reads_count;
     uint64_t disk_writes_count;
+    uint64_t records_reads_count;
+    uint64_t records_writes_count;
     bool persistent_file;
 
     bool read_block();
@@ -77,11 +82,11 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::reset_and_set_mode(Mode m
     this->mode = mode;
 }
 
-template<size_t _BufferSize> std::optional<Record> Buffer<_BufferSize>::read_record()  {
+template<size_t _BufferSize> std::optional<Record> Buffer<_BufferSize>::read_record() {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
     }
-
+    ++records_reads_count;
     if (remaining_bytes() >= sizeof(Record::data_t)) { // buffer contains enough bytes to be read;
         auto result = Record(*(Record::data_t *) (&(*buffer_iterator)));
         buffer_iterator += sizeof(Record::data_t);
@@ -110,6 +115,7 @@ template<size_t _BufferSize> Buffer<_BufferSize> &Buffer<_BufferSize>::write_rec
     if (mode != Mode::WRITE) {
         throw std::runtime_error("In order to write record you have to set buffer to writing mode");
     }
+    ++records_writes_count;
     if (free_bytes() >= sizeof(Record::data_t)) { // buffer contains enough space
         auto bytes = record.to_bytes();
         buffer_iterator = std::copy(bytes.begin(), bytes.end(), buffer_iterator);
@@ -152,7 +158,8 @@ template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() {
     if (!persistent_file) fs::remove(path);
 }
 
-template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffer::Mode mode, bool persistent_file) :
+template<size_t _BufferSize>
+Buffer<_BufferSize>::Buffer(fs::path const &path, Buffer::Mode mode, bool persistent_file) :
         path(path),
         file(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::app),
         mode(mode),
@@ -161,6 +168,8 @@ template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffe
         eob_guard(buffer_data.begin()),
         disk_reads_count(0),
         disk_writes_count(0),
+        records_reads_count(0),
+        records_writes_count(0),
         persistent_file(persistent_file) {
     file.exceptions(std::ios::badbit);
     if (mode == Buffer::Mode::WRITE) {
@@ -168,14 +177,15 @@ template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffe
         file.seekg(0);
         file.seekp(0);
     }
-    if (Config::verbose) {
+    debug([&] {
         std::cout << "Buffer file path" << ((persistent_file) ? " (persistent): " : ": ") << fs::absolute(this->path)
                   << std::endl;
-    }
+    });
+
 }
 // TODO: check if constructing fs::path with mutable char* is safe
 template<size_t _BufferSize>
-Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(::tmpnam(nullptr), mode, false) {}
+Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(fs::path(tmpnam(nullptr)), mode, false) {}
 
 template<size_t _BufferSize> void Buffer<_BufferSize>::flush() {
     if (mode == Buffer::Mode::WRITE && buffer_iterator != buffer_data.begin()) {
@@ -189,6 +199,8 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
     this->flush();
     auto disk_reads_count = this->disk_reads_count;
     auto disk_writes_count = this->disk_writes_count;
+    auto rec_reads_count = this->records_reads_count;
+    auto rec_writes_count = this->records_writes_count;
     auto f_g = this->file.tellg();
     auto f_p = this->file.tellp();
     auto f_state = this->file.rdstate();
@@ -215,9 +227,9 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
             std::optional<Record> record;
             while ((record = this->read_record())) {
                 std::cout << std::fixed << std::setprecision(2) << std::setw(5) << std::setfill('0') <<
-                                                                                                     record->get_avg() << ' ';
+                          record->get_avg() << ' ';
             }
-            std::cout <<std::setfill(' ')<< '\n';
+            std::cout << std::setfill(' ') << '\n';
             break;
     }
     // restore all inner state variables
@@ -230,6 +242,8 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
     this->mode = mode;
     this->disk_reads_count = disk_reads_count;
     this->disk_writes_count = disk_writes_count;
+    this->records_reads_count = rec_reads_count;
+    this->records_writes_count = rec_writes_count;
 }
 
 template<size_t _BufferSize> auto Buffer<_BufferSize>::free_bytes() const {

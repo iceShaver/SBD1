@@ -21,5 +21,6 @@ namespace Terminal {
     void set_color(Color color){
         std::cout << "\033[" << static_cast<int>(color) << 'm';
     }
+
 }
 #endif //SBD_1_TERMINAL_HH

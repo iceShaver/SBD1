@@ -4,13 +4,14 @@
 #include "buffer.hh"
 #include "records_generator.hh"
 #include "sorter.hh"
+#include "terminal.hh"
 #include <boost/program_options.hpp>
 #include <filesystem>
 
 /*
  * WARNING: Program is currently valid only for LE machines
  */
-using Buffer_t = Buffer<4096>;
+using Buffer_t = Buffer<16>;
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
@@ -31,7 +32,7 @@ int main(int argc, char **argv) {
                 ("random,r", po::value(&n_random_records), "generate N random records")
                 ("user,u", "user input for records generation")
                 ("verbose,v", "prints data after every stage of sorting")
-                ("debug,d", "prints debug info")
+                ("debug,d", "prints debug info (may affect I/O counters")
                 ("output,o", po::value(&output_file_path_string), "set output file");
         auto vm = po::variables_map{};
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -51,10 +52,10 @@ int main(int argc, char **argv) {
         if (vm.count("output")) {
             output_file_selected = true;
         }
-        if (vm.count("random")) { random_selected = true; }
-        if (vm.count("user")) { user_selected = true; }
-        if (vm.count("verbose")) { Config::verbose = true; }
-        if (vm.count("debug")) { Config::debug = true; }
+        if (vm.count("random")) random_selected = true;
+        if (vm.count("user")) user_selected = true;
+        if (vm.count("verbose")) Config::verbose = true;
+        if (vm.count("debug")) Config::debug = true;
     } catch (po::error &e) {
         std::cerr << "Error parsing program arguments\n" << e.what() << std::endl;
         return -1;
@@ -79,9 +80,20 @@ int main(int argc, char **argv) {
         std::cout << "Put grade1 grade2 grade3, ctrl+d to end\n" << std::endl;
         RecordsGenerator::from_keyboard(*buf);
     }
-    if (Config::verbose) std::cout << "Sorting (natural merge sort 2+1) ..." << std::endl;
+    if (Config::verbose) {
+        std::cout << "Sorting (natural merge sort 2+1) ...\n" << std::endl << "Before sort:\n";
+        buf->print_all_records();
+    }
     auto[iters, reads, writes] = Sorter::natural_merge_sort_2_1(*buf);
-    if (Config::verbose) std::cout << "OK" << std::endl;
-    std::cout << "Summary:\nIterations: " << iters << "\nReads: " << reads << "\nWrites: " << writes << std::endl;
+    if (Config::verbose) {
+        std::cout << "After sort:\n";
+        buf->print_all_records();
+        std::cout << "OK" << std::endl;
+    };
+    Terminal::set_color(Terminal::Color::FG_GREEN);
+    std::cout << "Summary:\nIterations: " << iters << "\t\tReads: " << reads << "\t\tWrites: " << writes
+              << "\t\tTotal: "
+              << reads + writes << std::endl;
+    Terminal::set_color(Terminal::Color::FG_DEFAULT);
     return 0;
 }

@@ -12,83 +12,78 @@
 
 namespace Sorter {
     template<size_t _BufferSize> auto natural_merge_sort_2_1(Buffer<_BufferSize> &buffer1) {
+        buffer1.reset_and_set_mode(Buffer<_BufferSize>::Mode::READ);
         buffer1.reset_io_counters();
-        auto buffers = std::array{ // TODO: change file paths to tmp files
+        auto buffers = std::array{
                 Buffer<_BufferSize>(Buffer<_BufferSize>::Mode::WRITE),
                 Buffer<_BufferSize>(Buffer<_BufferSize>::Mode::WRITE)
         };
-        if (Config::debug)buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY);
         auto iter_counter = 0u;
         while (true) {
-            buffer1.ResetAndSetMode(Buffer<_BufferSize>::Mode::READ);
-            for (auto &&buf:buffers) { buf.ResetAndSetMode(Buffer<_BufferSize>::Mode::WRITE); }
+            buffer1.reset_and_set_mode(Buffer<_BufferSize>::Mode::READ);
+            for (auto &&buf:buffers) { buf.reset_and_set_mode(Buffer<_BufferSize>::Mode::WRITE); }
             // distribute
-            auto sorted = true;
             auto out_buf_switch = false;
-            double prev_record_value{};
+            double prev_rec_avg{};
             std::optional<Record> rec{};
-            while ((rec = buffer1.ReadRecord())) {
-                if (rec->GetAvg() >= prev_record_value) {
-                    buffers[out_buf_switch].WriteRecord(*rec);
+            while ((rec = buffer1.read_record())) {
+                if (rec->get_avg() >= prev_rec_avg) {
+                    buffers[out_buf_switch].write_record(*rec);
                 } else {
-                    sorted = false;
-                    buffers[out_buf_switch = !out_buf_switch].WriteRecord(*rec);
+                    buffers[out_buf_switch = !out_buf_switch].write_record(*rec);
                 }
-                prev_record_value = rec->GetAvg();
+                prev_rec_avg = rec->get_avg();
             }
-            if (sorted) { break; }
             if (Config::debug) {
-                buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY);
-                for (auto &&buf:buffers) { buf.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
+                buffer1.print_all_records(Buffer<_BufferSize>::PrintMode::AVG_ONLY);
+                for (auto &&buf:buffers) { buf.print_all_records(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
             }
             // merge
-            buffer1.ResetAndSetMode(Buffer<_BufferSize>::Mode::WRITE);
-            for (auto &&buf:buffers) { buf.ResetAndSetMode(Buffer<_BufferSize>::Mode::READ); }
-            auto a = buffers[0].ReadRecord();
-            auto b = buffers[1].ReadRecord();
+            buffer1.reset_and_set_mode(Buffer<_BufferSize>::Mode::WRITE);
+            for (auto &&buf:buffers) { buf.reset_and_set_mode(Buffer<_BufferSize>::Mode::READ); }
+            auto a = buffers[0].read_record();
+            auto b = buffers[1].read_record();
             auto prev_a = std::optional<Record>{};
             auto prev_b = std::optional<Record>{};
             auto eor_a = false; // End Of Run
             auto eor_b = false;
+            auto sorted = true;
             while (true) {
                 prev_a = a;
                 prev_b = b;
                 if (eor_a && eor_b) {
-                    eor_a = eor_b = false;
+                    sorted = eor_a = eor_b = false;
                 } else if (a && !eor_a && b && !eor_b) {
-                    if (a->GetAvg() < b->GetAvg()) {
-                        buffer1.WriteRecord(*a);
-                        a = buffers[0].ReadRecord();
-                        if (a->GetAvg() < prev_a->GetAvg()) { eor_a = true; }
+                    if (a->get_avg() < b->get_avg()) {
+                        buffer1.write_record(*a);
+                        a = buffers[0].read_record();
+                        if (a->get_avg() < prev_a->get_avg()) { eor_a = true; }
                     } else {
-                        buffer1.WriteRecord(*b);
-                        b = buffers[1].ReadRecord();
-                        if (b->GetAvg() < prev_b->GetAvg()) { eor_b = true; }
+                        buffer1.write_record(*b);
+                        b = buffers[1].read_record();
+                        if (b->get_avg() < prev_b->get_avg()) { eor_b = true; }
                     }
                 } else if (a && !eor_a) {
-                    buffer1.WriteRecord(*a);
-                    a = buffers[0].ReadRecord();
-                    if (a->GetAvg() < prev_a->GetAvg()) { eor_a = true; }
+                    buffer1.write_record(*a);
+                    a = buffers[0].read_record();
+                    if (a->get_avg() < prev_a->get_avg()) { eor_a = true; }
                 } else if (b && !eor_b) {
-                    buffer1.WriteRecord(*b);
-                    b = buffers[1].ReadRecord();
-                    if (b->GetAvg() < prev_b->GetAvg()) { eor_b = true; }
+                    buffer1.write_record(*b);
+                    b = buffers[1].read_record();
+                    if (b->get_avg() < prev_b->get_avg()) { eor_b = true; }
                 } else if (a) {
                     eor_a = false;
                 } else if (b) {
                     eor_b = false;
                 } else break;
             }
-            if (Config::debug) { buffer1.PrintAllRecords(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
             ++iter_counter;
+            if (sorted) break;
         }
+        if (Config::debug) { buffer1.print_all_records(Buffer<_BufferSize>::PrintMode::AVG_ONLY); }
         return std::tuple(iter_counter,
                           buffer1.reads_count() + buffers[0].reads_count() + buffers[1].reads_count(),
                           buffer1.writes_count() + buffers[0].writes_count() + buffers[1].writes_count());
-    }
-
-    template<size_t _BufferSize> void polyphase_sort_3(Buffer<_BufferSize> &buffer1) {
-
     }
 }
 

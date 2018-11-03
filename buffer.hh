@@ -20,6 +20,7 @@
 template<size_t _BufferSize> class Buffer;
 
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &, const Buffer<_BufferSize> &);
+
 namespace fs = std::filesystem;
 
 template<size_t _BufferSize> class Buffer final {
@@ -39,13 +40,13 @@ public:
     Buffer(const char *path, Mode mode, bool persistent_file = true);
     explicit Buffer(Mode mode);
 
-    std::optional<Record> ReadRecord();
-    Buffer &WriteRecord(Record const &record);
-    void ResetAndSetMode(Mode mode);
-    auto FreeBytes() const;
-    auto RemainingBytes() const;
-    void Flush();
-    void PrintAllRecords(PrintMode printMode = PrintMode::FULL);
+    std::optional<Record> read_record();
+    Buffer &write_record(Record const &record);
+    void reset_and_set_mode(Mode mode);
+    auto free_bytes() const;
+    auto remaining_bytes() const;
+    void flush();
+    void print_all_records(PrintMode printMode = PrintMode::FULL);
     auto reads_count() const { return disk_reads_count; }
     auto writes_count() const { return disk_writes_count; }
     void reset_io_counters() { disk_reads_count = disk_writes_count = 0; }
@@ -66,8 +67,8 @@ private:
     void write_block();
 };
 
-template<size_t _BufferSize> void Buffer<_BufferSize>::ResetAndSetMode(Mode mode) {
-    this->Flush();
+template<size_t _BufferSize> void Buffer<_BufferSize>::reset_and_set_mode(Mode mode) {
+    this->flush();
     eob_guard = buffer_iterator = buffer_data.begin();
     file.clear();
     if (mode == Buffer::Mode::WRITE) { fs::resize_file(path, 0); }
@@ -76,46 +77,46 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::ResetAndSetMode(Mode mode
     this->mode = mode;
 }
 
-template<size_t _BufferSize> std::optional<Record> Buffer<_BufferSize>::ReadRecord()  {
+template<size_t _BufferSize> std::optional<Record> Buffer<_BufferSize>::read_record()  {
     if (mode != Mode::READ) {
         throw std::runtime_error("In order to read record you have to set buffer to reading mode.");
     }
 
-    if (RemainingBytes() >= sizeof(Record::data_t)) { // buffer contains enough bytes to be read;
+    if (remaining_bytes() >= sizeof(Record::data_t)) { // buffer contains enough bytes to be read;
         auto result = Record(*(Record::data_t *) (&(*buffer_iterator)));
         buffer_iterator += sizeof(Record::data_t);
         return result;
     }
     // buffer contains bytes partially, its needed to read new block
-    if (RemainingBytes() > 0 && RemainingBytes() < sizeof(Record::data_t)) {
+    if (remaining_bytes() > 0 && remaining_bytes() < sizeof(Record::data_t)) {
         if (file.eof()) { throw std::runtime_error("Buffer error: db file corrupted"); }
         auto bytes = std::vector<uint8_t>();
         bytes.reserve(sizeof(Record::data_t));
-        auto bytesRead = RemainingBytes();
+        auto bytes_read = remaining_bytes();
         std::copy(buffer_iterator, eob_guard, bytes.begin());
         if (!this->read_block()) { return std::nullopt; }
-        std::copy(buffer_iterator, buffer_iterator + bytesRead, std::back_inserter(bytes));
-        buffer_iterator += bytesRead;
+        std::copy(buffer_iterator, buffer_iterator + bytes_read, std::back_inserter(bytes));
+        buffer_iterator += bytes_read;
         return Record(*reinterpret_cast<Record::data_t *> (bytes.data()));
     }
     if (buffer_iterator == eob_guard && !file.eof()) { // buffer contains no bytes, so we must read block from disk
-        if (this->read_block()) { return ReadRecord(); }
+        if (this->read_block()) { return read_record(); }
         return std::nullopt;
     }
     return std::nullopt;
 }
 
-template<size_t _BufferSize> Buffer<_BufferSize> &Buffer<_BufferSize>::WriteRecord(Record const &record) {
+template<size_t _BufferSize> Buffer<_BufferSize> &Buffer<_BufferSize>::write_record(Record const &record) {
     if (mode != Mode::WRITE) {
         throw std::runtime_error("In order to write record you have to set buffer to writing mode");
     }
-    if (FreeBytes() >= sizeof(Record::data_t)) { // buffer contains enough space
-        auto bytes = record.ToBytes();
+    if (free_bytes() >= sizeof(Record::data_t)) { // buffer contains enough space
+        auto bytes = record.to_bytes();
         buffer_iterator = std::copy(bytes.begin(), bytes.end(), buffer_iterator);
         return *this;
     }
-    if (FreeBytes() > 0 && FreeBytes() < sizeof(Record::data_t)) { // buffer contains space partially
-        auto bytes = record.ToBytes();
+    if (free_bytes() > 0 && free_bytes() < sizeof(Record::data_t)) { // buffer contains space partially
+        auto bytes = record.to_bytes();
         int bytesCopied = buffer_data.end() - buffer_iterator;
         buffer_iterator = std::copy(bytes.begin(), bytes.begin() + bytesCopied, buffer_iterator); // write first part
         this->write_block();
@@ -124,7 +125,7 @@ template<size_t _BufferSize> Buffer<_BufferSize> &Buffer<_BufferSize>::WriteReco
     }
     if (buffer_iterator == buffer_data.end()) { // buffer contains no space
         this->write_block();
-        this->WriteRecord(record);
+        this->write_record(record);
         return *this;
     }
     throw std::runtime_error("Unable to write record, internal buffer error");
@@ -146,7 +147,7 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::write_block() {
 }
 
 template<size_t _BufferSize> Buffer<_BufferSize>::~Buffer() {
-    this->Flush();
+    this->flush();
     file.close();
     if (!persistent_file) fs::remove(path);
 }
@@ -176,15 +177,18 @@ template<size_t _BufferSize> Buffer<_BufferSize>::Buffer(const char *path, Buffe
 template<size_t _BufferSize>
 Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(::tmpnam(nullptr), mode, false) {}
 
-template<size_t _BufferSize> void Buffer<_BufferSize>::Flush() {
+template<size_t _BufferSize> void Buffer<_BufferSize>::flush() {
     if (mode == Buffer::Mode::WRITE && buffer_iterator != buffer_data.begin()) {
         this->write_block();
     }
 }
 
-template<size_t _BufferSize> void Buffer<_BufferSize>::PrintAllRecords(PrintMode printMode) {
+template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMode printMode) {
     // make copy of all inner state variables
-    this->Flush();
+
+    this->flush();
+    auto disk_reads_count = this->disk_reads_count;
+    auto disk_writes_count = this->disk_writes_count;
     auto f_g = this->file.tellg();
     auto f_p = this->file.tellp();
     auto f_state = this->file.rdstate();
@@ -192,9 +196,8 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::PrintAllRecords(PrintMode
     auto buffer_iterator_distance = this->buffer_iterator - this->buffer_data.begin();
     auto eob_guard_distance = this->eob_guard - this->buffer_data.begin();
     auto mode = this->mode;
-    auto disk_reads_count = this->disk_reads_count;
-    auto disk_writes_count = this->disk_writes_count;
-    this->ResetAndSetMode(Mode::READ);
+
+    this->reset_and_set_mode(Mode::READ);
     auto col_width = 20;
     switch (printMode) {
         case PrintMode::FULL: {
@@ -205,16 +208,16 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::PrintAllRecords(PrintMode
                       << std::setw(col_width) << "Średnia" << '\n';
             std::optional<Record> record;
 
-            while ((record = this->ReadRecord())) { std::cout << *record << '\n'; }
+            while ((record = this->read_record())) { std::cout << *record << '\n'; }
             break;
         }
         case PrintMode::AVG_ONLY:
             std::optional<Record> record;
-            while ((record = this->ReadRecord())) {
+            while ((record = this->read_record())) {
                 std::cout << std::fixed << std::setprecision(2) << std::setw(5) << std::setfill('0') <<
-                          record->GetAvg() << ' ';
+                                                                                                     record->get_avg() << ' ';
             }
-            std::cout << '\n';
+            std::cout <<std::setfill(' ')<< '\n';
             break;
     }
     // restore all inner state variables
@@ -229,12 +232,12 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::PrintAllRecords(PrintMode
     this->disk_writes_count = disk_writes_count;
 }
 
-template<size_t _BufferSize> auto Buffer<_BufferSize>::FreeBytes() const {
+template<size_t _BufferSize> auto Buffer<_BufferSize>::free_bytes() const {
     auto result = buffer_data.end() - buffer_iterator;
     return static_cast<long unsigned>(result > 0 ? result : 0);
 }
 
-template<size_t _BufferSize> auto Buffer<_BufferSize>::RemainingBytes() const {
+template<size_t _BufferSize> auto Buffer<_BufferSize>::remaining_bytes() const {
     auto result = eob_guard - buffer_iterator;
     return static_cast<long unsigned>(result > 0 ? result : 0);
 }

@@ -23,7 +23,7 @@ namespace RecordsGenerator {
 
     template<size_t _BufferSize> void random(unsigned long long n, Buffer<_BufferSize> &buffer) {
         for (auto i = 0u; i < n; ++i) {
-            buffer.WriteRecord(Record::Random());
+            buffer.write_record(Record::random());
         }
     }
 
@@ -34,7 +34,7 @@ namespace RecordsGenerator {
             if (cin.eof())break;
             try {
                 auto record = Record{static_cast<uint8_t>(a), static_cast<uint8_t>(b), static_cast<uint8_t>(c)};
-                buffer.WriteRecord(record);
+                buffer.write_record(record);
                 cout << "Saved record: " << record << endl;
             } catch (std::invalid_argument &e) {
                 cerr << "Error while creating record: " << e.what() << endl;
@@ -55,7 +55,7 @@ namespace RecordsGenerator {
         };
         string line{};
         while (!std::getline(file, line).eof()) {
-            buffer.WriteRecord(to_record(line));
+            buffer.write_record(to_record(line));
         }
     }
 }

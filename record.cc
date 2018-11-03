@@ -9,16 +9,16 @@
 #include <cmath>
 #include <iomanip>
 
-uint8_t Record::GetGrade(int gradeNumber) const {
+uint8_t Record::get_grade(int gradeNumber) const {
     if (gradeNumber <= GRADES_NUMBER && gradeNumber > 0) {
         return static_cast<uint8_t>(data >> (3 - gradeNumber) * 8);
     }
     throw std::invalid_argument("gradeNumber has to be <1, 3>");
 }
 
-Record::Record(data_t data) : data(data) { calcAvg(); }
+Record::Record(data_t data) : data(data) { calc_avg(); }
 
-std::array<uint8_t, sizeof(Record::data_t)> Record::ToBytes() const {
+std::array<uint8_t, sizeof(Record::data_t)> Record::to_bytes() const {
     auto result = std::array<uint8_t, sizeof(data_t)>();
     *reinterpret_cast<data_t *>(result.data()) = data;
     return result;
@@ -33,28 +33,28 @@ Record::Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grad
         throw std::invalid_argument("invalid grade used to instatiate record");
     }
     data = grade3 | grade2 << 8 | grade1 << 16 | student_id << 24;
-    calcAvg();
+    calc_avg();
 }
 
 Record::Record(uint8_t grade1, uint8_t grade2, uint8_t grade3) : Record(record_id_counter++, grade1, grade2, grade3) {}
 
-void Record::calcAvg() {
+void Record::calc_avg() {
     avg = 0;
-    for (int i = 1; i <= GRADES_NUMBER; ++i) { avg += GetGrade(i); }
+    for (int i = 1; i <= GRADES_NUMBER; ++i) { avg += get_grade(i); }
     avg /= (double) GRADES_NUMBER;
 }
 
 std::ostream &operator<<(std::ostream &os, const Record &record) {
     auto col_width = 20;
-    return os << std::setw(col_width) << record.GetStudentId()
-              << std::setw(col_width) << +record.GetGrade(1)
-              << std::setw(col_width) << +record.GetGrade(2)
-              << std::setw(col_width) << +record.GetGrade(3)
-              << std::setw(col_width) << std::setprecision(2) << std::fixed << record.GetAvg();
+    return os << std::setw(col_width) << record.get_student_id()
+              << std::setw(col_width) << +record.get_grade(1)
+              << std::setw(col_width) << +record.get_grade(2)
+              << std::setw(col_width) << +record.get_grade(3)
+              << std::setw(col_width) << std::setprecision(2) << std::fixed << record.get_avg();
 }
 
-uint64_t Record::GetStudentId() const { return data >> 24; }
+uint64_t Record::get_student_id() const { return data >> 24; }
 
-Record Record::Random() {
+Record Record::random() {
     return Record{static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen))};
 }

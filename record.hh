@@ -24,30 +24,33 @@ public:
     using data_t = uint64_t;
     static constexpr auto const GRADE_MAX = 100u;
     static constexpr auto const GRADE_MIN = 0u;
-    //    Record() = delete;
-//    Record(Record const &) = delete;
-//    Record(Record &&) = delete;
-//    Record &operator=(Record const &) = delete;
-//    Record &operator=(Record &&) = delete;
+    Record() = delete;
+    Record(Record const &) = default;
+    Record(Record &&) = default;
+    Record &operator=(Record const &) = default;
+    Record &operator=(Record &&) = default;
     explicit Record(data_t data);
 
     Record(uint8_t grade1, uint8_t grade2, uint8_t grade3);
     ~Record() = default;
 
 
-    uint64_t GetStudentId() const;
-    uint8_t GetGrade(int gradeNumber) const;
-    double GetAvg() const { return avg; }
-    std::array<uint8_t, sizeof(data_t)> ToBytes() const;
+    uint64_t get_student_id() const;
+    uint8_t get_grade(int gradeNumber) const;
+    double get_avg() const { return avg; }
+    std::array<uint8_t, sizeof(data_t)> to_bytes() const;
     friend std::ostream &operator<<(std::ostream &os, const Record &record);
 
-    static Record Random();
+    static Record random();
 private:
     Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
-    inline static uint64_t record_id_counter = 0;
-    void calcAvg();
+
+    void calc_avg();
+
     data_t data;
     float avg;
+
+    inline static uint64_t record_id_counter = 0;
     inline static std::random_device rd{};
     inline static std::mt19937_64 gen = std::mt19937_64{rd()};
     inline static std::uniform_int_distribution<> uid{GRADE_MIN, GRADE_MAX};

@@ -16,7 +16,14 @@ namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
 
-enum class Action { NOT_SELECTED, SORT_INPUT_FILE, SORT_RANDOM_DATA, SORT_USER_INPUT_DATA, MEASURE, GENERATE_TEST_FILES };
+enum class Action {
+    NOT_SELECTED,
+    SORT_INPUT_FILE,
+    SORT_RANDOM_DATA,
+    SORT_USER_INPUT_DATA,
+    MEASURE,
+    GENERATE_TEST_FILES
+};
 
 
 /*
@@ -35,13 +42,13 @@ int main(int argc, char **argv) {
         auto desc = po::options_description{"Allowed options"};
         desc.add_options()
                 ("help,h", "display this help")
-                ("output,o", po::value(&output_file_path_string), "set output file with results")
-                ("file,f", po::value(&file_path_string), "choose file as data source")
-                ("random,r", po::value(&n_random_records), "generate N random records and sort them")
-                ("user,u", "generate records from user input and sort them")
-                ("verbose,v", "prints verbose messages")
+                ("output,o", po::value(&output_file_path_string), "save sorted records in file")
+                ("file,f", po::value(&file_path_string), "sort given file")
+                ("random,r", po::value(&n_random_records), "sort N random generated records")
+                ("user,u", "sort user input records")
+                ("verbose,v", "prints verbose messages about program execution")
                 ("debug,d", "print records every iteration and other debug info (may affect I/O counters)")
-                ("measure,m", "make measurements")
+                ("measure,m", "make defined measurements")
                 ("generate,g", "generate test files");
         auto vm = po::variables_map{};
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -58,7 +65,7 @@ int main(int argc, char **argv) {
         else if (vm.count("file")) {
             file_path = fs::path{file_path_string};
             if (!fs::is_regular_file(file_path))
-                throw po::error("Specified file does not exists or is not a file: " + fs::absolute(file_path).string());
+                throw po::error("Specified file does not exist or is not a file: " + fs::absolute(file_path).string());
             action = Action::SORT_INPUT_FILE;
         } else if (vm.count("random")) action = Action::SORT_RANDOM_DATA;
         else if (vm.count("user")) action = Action::SORT_USER_INPUT_DATA;
@@ -71,8 +78,11 @@ int main(int argc, char **argv) {
         cerr << "Error parsing program arguments\n" << e.what() << endl;
         return -1;
     }
-    verbose([]{cout << "Buffer size: " << std::to_string(Config::BUFFER_SIZE) << " bytes\n";});
-    verbose([&]{if(output_file_selected) cout << "Output file: " << fs::absolute(output_file_path_string).string() << '\n';});
+    verbose([] { cout << "Buffer size: " << std::to_string(Config::BUFFER_SIZE) << " bytes\n"; });
+    verbose([&] {
+        if (output_file_selected)
+            cout << "Output file: " << fs::absolute(output_file_path_string).string() << '\n';
+    });
 
     // Create buffer
     auto buf = (output_file_selected) ?
@@ -95,7 +105,7 @@ int main(int argc, char **argv) {
             RecordsGenerator::from_keyboard(buf);
             break;
         case Action::MEASURE:
-            verbose([] { cout << "Making measurements ...\n"; });
+            cout << "Making measurements ...\n";
             Measurements::io();
             return 0;
             break;
@@ -109,9 +119,9 @@ int main(int argc, char **argv) {
     }
 
     verbose([&] {
-        cout <<"Before sort:\n";
+        cout << "Before sort:\n";
         buf.print_all_records();
-        cout << "Sorting (natural merge sort 2+1) ...\n" << endl;
+        cout << "Sorting (natural merge sort 2+1) ...\n";
     });
 
     // Sort buffer
@@ -126,10 +136,10 @@ int main(int argc, char **argv) {
 
     // Print summary
     Terminal::set_color(Terminal::Color::FG_GREEN);
-    cout << "Summary:\nIterations: " << iters << "\t\tDisk reads: " << reads << "\t\tDisk writes: " << writes
-         << "\t\tTotal disk I/O: " << reads + writes
-         << "\nRecords reads: " << rec_reads << "\t\tRecords writes: " << rec_writes
-         << "\t\tTotal records R/W: " << rec_reads + rec_writes;
+    cout << "Summary:\nIterations: " << iters << "\nDisk reads: " << reads << "\nDisk writes: " << writes
+         << "\nTotal disk I/O: " << reads + writes
+         << "\nRecords reads: " << rec_reads << "\nRecords writes: " << rec_writes
+         << "\nTotal records R/W: " << rec_reads + rec_writes << endl;
     Terminal::set_color(Terminal::Color::FG_DEFAULT);
     return 0;
 }

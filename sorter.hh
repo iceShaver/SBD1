@@ -36,8 +36,12 @@ namespace Sorter {
                 prev_rec_avg = rec->get_avg();
             }
             debug([&] {
+                std::cout << "Buffer 1: ";
                 buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY);
-                for (auto &&buf:buffs) { buf.print_all_records(Buffer_t::PrintMode::AVG_ONLY); }
+                std::cout << "Buffer 2: ";
+                buffs[0].print_all_records(Buffer_t::PrintMode::AVG_ONLY);
+                std::cout << "Buffer 3: ";
+                buffs[1].print_all_records(Buffer_t::PrintMode::AVG_ONLY);
             });
 
             // merge
@@ -74,15 +78,20 @@ namespace Sorter {
                     b = buffs[1].read_record();
                     if (b->get_avg() < prev_b->get_avg()) { eor_b = true; }
                 } else if (a) {
-                    eor_a = false;
+                    sorted = eor_a = false;
                 } else if (b) {
-                    eor_b = false;
-                } else break;
+                    sorted = eor_b = false;
+                } else {
+                    break;
+                }
             }
             ++iter_counter;
             if (sorted) break;
         }
-        debug([&] { buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY); });
+        debug([&] {
+            std::cout << "Buffer 1: ";
+            buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY);
+        });
         return std::tuple{
                 iter_counter,
                 buf1.get_disk_reads_count() + buffs[0].get_disk_reads_count() + buffs[1].get_disk_reads_count(),

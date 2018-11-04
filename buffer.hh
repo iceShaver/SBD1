@@ -216,10 +216,10 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
     switch (printMode) {
         case PrintMode::FULL: {
             std::cout << std::setw(col_width) << "ID"
-                      << std::setw(col_width) << "Ocena 1"
-                      << std::setw(col_width) << "Ocena 2"
-                      << std::setw(col_width) << "Ocena 3"
-                      << std::setw(col_width) << "Średnia" << '\n';
+                      << std::setw(col_width) << "Grade 1"
+                      << std::setw(col_width) << "Grade 2"
+                      << std::setw(col_width) << "Grade 3"
+                      << std::setw(col_width) << "Average" << '\n';
             std::optional<Record> record;
 
             while ((record = this->read_record())) { std::cout << *record << '\n'; }
@@ -228,10 +228,9 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
         case PrintMode::AVG_ONLY:
             std::optional<Record> record;
             while ((record = this->read_record())) {
-                std::cout << std::fixed << std::setprecision(2) << std::setw(5) << std::setfill('0') <<
-                          record->get_avg() << ' ';
+                std::cout << std::fixed << std::setprecision(2) << std::setw(6) << record->get_avg() << ' ';
             }
-            std::cout << std::setfill(' ') << '\n';
+            std::cout << '\n';
             break;
     }
     // restore all inner state variables

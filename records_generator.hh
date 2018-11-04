@@ -44,8 +44,8 @@ namespace RecordsGenerator {
         }
     }
 
-    template<size_t _BufferSize> void from_csv_file(Buffer<_BufferSize> &buffer, fs::path const &file_path) {
-        auto file = fstream(file_path, ios::in);
+    template<size_t _BufferSize> void from_file(Buffer<_BufferSize> &buffer, fs::path const &file_path) {
+        /*auto file = fstream(file_path, ios::in);
         auto to_record = [](auto str) {
             auto result = std::vector<string>(3);
             boost::split(result, str, boost::is_any_of(","));
@@ -53,9 +53,23 @@ namespace RecordsGenerator {
                           static_cast<uint8_t>(std::stoi(result[1])),
                           static_cast<uint8_t>(std::stoi(result[2]))};
         };
-        string line{};
+        string line;
         while (!std::getline(file, line).eof()) {
             buffer.write_record(to_record(line));
+        }*/
+        fs::copy(file_path, buffer.get_buffer_file_path());
+        buffer.reset_and_set_mode(Buffer<_BufferSize>::Mode::READ);
+    }
+
+    void generate_test_files() {
+        constexpr auto const FILES_N = 10;
+        auto tests_dir = fs::path{"test_files"};
+        if (!fs::exists(tests_dir))fs::create_directory(tests_dir);
+        for (int j = 0; j < FILES_N; ++j) {
+            auto buf = Buffer<Config::BUFFER_SIZE>{tests_dir / (std::to_string(j) + ".bin"),
+                                                   Buffer<Config::BUFFER_SIZE>::Mode::WRITE};
+            RecordsGenerator::random(static_cast<uint64_t >(std::pow(j + 1, 2)), buf);
+            buf.flush();
         }
     }
 }

@@ -53,8 +53,9 @@ public:
     auto get_records_reads_count() const { return records_reads_count; }
     auto get_records_writes_count() const { return records_writes_count; }
     void reset_io_counters() { records_reads_count = records_writes_count = disk_reads_count = disk_writes_count = 0; }
-    friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
+    void load_from_file(fs::path const &path);
 
+    friend std::ostream &operator<<<_BufferSize>(std::ostream &os, const Buffer<_BufferSize> &buffer);
 private:
     fs::path path;
     std::fstream file;
@@ -171,9 +172,10 @@ Buffer<_BufferSize>::Buffer(fs::path const &path, Buffer::Mode mode, bool persis
         records_reads_count(0),
         records_writes_count(0),
         persistent_file(persistent_file) {
+    if (file.fail()) throw std::runtime_error("Couldn't open buffer file" + fs::absolute(this->path).string());
     file.exceptions(std::ios::badbit);
     if (mode == Buffer::Mode::WRITE) {
-        fs::resize_file(this->path, 0);
+        if (fs::exists(path)) fs::resize_file(this->path, 0);
         file.seekg(0);
         file.seekp(0);
     }
@@ -258,6 +260,12 @@ template<size_t _BufferSize> auto Buffer<_BufferSize>::remaining_bytes() const {
 
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &os, const Buffer<_BufferSize> &buffer) {
     return os << "Reads count: " << buffer.disk_reads_count << "\nWritesCount: " << buffer.disk_writes_count;
+}
+template<size_t _BufferSize>
+void Buffer<_BufferSize>::load_from_file(fs::path const &path) {
+    if (!fs::is_regular_file(path)) throw std::runtime_error("File doesn't exist" + fs::absolute(path).string());
+    this->reset_and_set_mode(Mode::WRITE);
+    file << std::fstream(path).rdbuf();
 }
 
 

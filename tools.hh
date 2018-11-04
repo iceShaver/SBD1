@@ -8,14 +8,14 @@
 #include <functional>
 #include "config.hh"
 
-template<typename _T>
-void verbose(_T f) {
+template<typename _F>
+void verbose(_F f) {
     if (Config::verbose)
         std::invoke(f);
 }
 
-template<typename _T>
-void debug(_T f) {
+template<typename _F>
+void debug(_F f) {
     if (Config::debug)
         std::invoke(f);
 }

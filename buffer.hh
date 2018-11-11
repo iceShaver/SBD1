@@ -48,10 +48,10 @@ public:
     auto remaining_bytes() const;
     void flush();
     void print_all_records(PrintMode printMode = PrintMode::FULL);
-    auto get_disk_reads_count() const { return disk_reads_count; }
-    auto get_disk_writes_count() const { return disk_writes_count; }
-    auto get_records_reads_count() const { return records_reads_count; }
-    auto get_records_writes_count() const { return records_writes_count; }
+    auto get_disk_r_count() const { return disk_reads_count; }
+    auto get_disk_w_count() const { return disk_writes_count; }
+    auto get_rec_r_count() const { return records_reads_count; }
+    auto get_rec_w_count() const { return records_writes_count; }
     void reset_io_counters() { records_reads_count = records_writes_count = disk_reads_count = disk_writes_count = 0; }
     void load_from_file(fs::path const &path);
 
@@ -185,7 +185,7 @@ Buffer<_BufferSize>::Buffer(fs::path const &path, Buffer::Mode mode, bool persis
     });
 
 }
-// TODO: check if constructing fs::path with mutable char* is safe
+
 template<size_t _BufferSize>
 Buffer<_BufferSize>::Buffer(Buffer::Mode mode) : Buffer(fs::path(tmpnam(nullptr)), mode, false) {}
 
@@ -197,7 +197,6 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::flush() {
 
 template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMode printMode) {
     // make copy of all inner state variables
-
     this->flush();
     auto disk_reads_count = this->disk_reads_count;
     auto disk_writes_count = this->disk_writes_count;
@@ -213,6 +212,7 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
 
     this->reset_and_set_mode(Mode::READ);
     auto col_width = 20;
+    uint64_t counter = 0;
     switch (printMode) {
         case PrintMode::FULL: {
             std::cout << std::setw(col_width) << "ID"
@@ -221,18 +221,24 @@ template<size_t _BufferSize> void Buffer<_BufferSize>::print_all_records(PrintMo
                       << std::setw(col_width) << "Grade 3"
                       << std::setw(col_width) << "Average" << '\n';
             std::optional<Record> record;
-
-            while ((record = this->read_record())) { std::cout << *record << '\n'; }
+            while ((record = this->read_record())) {
+                std::cout << *record << '\n';
+                ++counter;
+            }
+            std::cout << "\nTotal records: " << counter << '\n';
             break;
         }
-        case PrintMode::AVG_ONLY:
+        case PrintMode::AVG_ONLY: {
             std::optional<Record> record;
             while ((record = this->read_record())) {
                 std::cout << std::fixed << std::setprecision(2) << std::setw(6) << record->get_avg() << ' ';
+                ++counter;
             }
             std::cout << '\n';
             break;
+        }
     }
+
     // restore all inner state variables
     this->file.seekg(f_g);
     this->file.seekp(f_p);
@@ -260,8 +266,8 @@ template<size_t _BufferSize> auto Buffer<_BufferSize>::remaining_bytes() const {
 template<size_t _BufferSize> std::ostream &operator<<(std::ostream &os, const Buffer<_BufferSize> &buffer) {
     return os << "Reads count: " << buffer.disk_reads_count << "\nWritesCount: " << buffer.disk_writes_count;
 }
-template<size_t _BufferSize>
-void Buffer<_BufferSize>::load_from_file(fs::path const &path) {
+
+template<size_t _BufferSize> void Buffer<_BufferSize>::load_from_file(fs::path const &path) {
     if (!fs::is_regular_file(path)) throw std::runtime_error("File doesn't exist" + fs::absolute(path).string());
     this->reset_and_set_mode(Mode::WRITE);
     file << std::fstream(path).rdbuf();

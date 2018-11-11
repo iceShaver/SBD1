@@ -14,10 +14,9 @@
 
 namespace Measurements {
     namespace {
-        constexpr auto const BUFFER_SIZE = 4096;
-        using Buffer_t = Buffer<BUFFER_SIZE>;
+        using Buffer_t = Buffer<Config::BUFFER_SIZE>;
 
-        struct separator : std::numpunct<char> {
+        struct separator final : std::numpunct<char> {
             std::string do_grouping() const override { return "\03"; }
             char do_thousands_sep() const override { return ' '; }
         };
@@ -27,10 +26,9 @@ namespace Measurements {
         using std::cout, std::endl, std::setw;
         // set_size, iters, disk_reads, disk_writes, rec_reads, rec_writes
         auto results = std::vector<std::tuple<uint64_t, uint64_t, uint64_t, uint64_t, uint64_t>>();
-        constexpr auto const OUT_FILENAME = "measurements_results.csv";
         constexpr auto const DELIM = ',';
         constexpr auto const COL_WIDTH = 15;
-        auto result_file = std::fstream(OUT_FILENAME, std::ios::out | std::ios::trunc);
+        auto result_file = std::fstream(Config::MEASUREMENTS_OUT_FILENAME, std::ios::out | std::ios::trunc);
         auto data_sets = std::array{
                 100, 500,
                 1'000, 5'000,
@@ -61,9 +59,9 @@ namespace Measurements {
                       << std::setw(COL_WIDTH) << theoretical_disk_io(N) << '\n';
 
         }
-        std::cout << "Results saved in: " + fs::absolute(OUT_FILENAME).string() << std::endl;
+        std::cout << "Results saved in: " + fs::absolute(Config::MEASUREMENTS_OUT_FILENAME).string() << std::endl;
     }
-};
+}
 
 
 #endif //SBD_1_MEASUREMENTS_HH

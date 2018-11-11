@@ -10,8 +10,7 @@
 #include "measurements.hh"
 
 using Buffer_t = Buffer<Config::BUFFER_SIZE>;
-using std::cout, std::cerr,
-std::endl;
+using std::cout, std::cerr,std::endl;
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
@@ -22,22 +21,20 @@ enum class Action {
     SORT_RANDOM_DATA,
     SORT_USER_INPUT_DATA,
     MEASURE,
-    GENERATE_TEST_FILES
+    GENERATE_TEST_FILES,
+    PRINT_FILE
 };
 
 
-/*
- * WARNING: Program is currently valid only for LE machines
- */
 int main(int argc, char **argv) {
 
     // Parse program arguments
-    auto action = Action::NOT_SELECTED;
-    auto file_path_string = std::string{};
-    auto file_path = fs::path{};
-    auto output_file_path_string = std::string{};
-    auto n_random_records = size_t{};
-    auto output_file_selected = false;
+    Action action = Action::NOT_SELECTED;
+    std::string file_path_string;
+    fs::path file_path;
+    std::string output_file_path_string;
+    size_t n_random_records;
+    bool output_file_selected = false;
     try {
         auto desc = po::options_description{"Allowed options"};
         desc.add_options()
@@ -49,10 +46,13 @@ int main(int argc, char **argv) {
                 ("verbose,v", "prints verbose messages about program execution")
                 ("debug,d", "print records every iteration and other debug info (may affect I/O counters)")
                 ("measure,m", "make defined measurements")
-                ("generate,g", "generate test files");
+                ("generate,g", "generate test files")
+                ("print,p", po::value(&file_path_string), "print given file at standard output");
         auto vm = po::variables_map{};
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
+
+
         if (vm.count("help")) {
             std::cout << desc << '\n';
             return 0;
@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
         if (vm.count("output")) output_file_selected = true;
         if (vm.count("verbose")) Config::verbose = true;
         if (vm.count("debug")) Config::debug = true;
+
         if (vm.count("generate")) action = Action::GENERATE_TEST_FILES;
         else if (vm.count("measure")) action = Action::MEASURE;
         else if (vm.count("file")) {
@@ -67,6 +68,11 @@ int main(int argc, char **argv) {
             if (!fs::is_regular_file(file_path))
                 throw po::error("Specified file does not exist or is not a file: " + fs::absolute(file_path).string());
             action = Action::SORT_INPUT_FILE;
+        } else if (vm.count("print")) {
+            file_path = fs::path{file_path_string};
+            if (!fs::is_regular_file(file_path))
+                throw po::error("Specified file does not exist or is not a file: " + fs::absolute(file_path).string());
+            action = Action::PRINT_FILE;
         } else if (vm.count("random")) action = Action::SORT_RANDOM_DATA;
         else if (vm.count("user")) action = Action::SORT_USER_INPUT_DATA;
 
@@ -78,17 +84,20 @@ int main(int argc, char **argv) {
         cerr << "Error parsing program arguments\n" << e.what() << endl;
         return -1;
     }
+
+
     verbose([] { cout << "Buffer size: " << std::to_string(Config::BUFFER_SIZE) << " bytes\n"; });
     verbose([&] {
         if (output_file_selected)
             cout << "Output file: " << fs::absolute(output_file_path_string).string() << '\n';
     });
 
+
     // Create buffer
     auto buf = (output_file_selected) ?
                Buffer_t(output_file_path_string.c_str(), Buffer_t::Mode::WRITE) :
                Buffer_t(Buffer_t::Mode::WRITE);
-    // Fill the buffer
+
     switch (action) {
         case Action::SORT_INPUT_FILE:
             verbose([&] { cout << "Reading data from file: " << fs::absolute(file_path) << endl; });
@@ -113,7 +122,11 @@ int main(int argc, char **argv) {
             verbose([] { cout << "Generating test files ...\n"; });
             RecordsGenerator::generate_test_files();
             return 0;
-            break;
+        case Action::PRINT_FILE:
+            verbose([&] { cout << "Printing file " << fs::absolute(file_path).string(); });
+            buf.load_from_file(file_path);
+            buf.print_all_records(Buffer_t::PrintMode::FULL);
+            return 0;
         case Action::NOT_SELECTED:
             break;
     }

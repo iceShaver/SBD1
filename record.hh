@@ -24,13 +24,14 @@ public:
     using data_t = uint64_t;
     static constexpr auto const GRADE_MAX = 100u;
     static constexpr auto const GRADE_MIN = 0u;
+
     Record() = delete;
     Record(Record const &) = default;
     Record(Record &&) = default;
     Record &operator=(Record const &) = default;
     Record &operator=(Record &&) = default;
-    explicit Record(data_t data);
 
+    explicit Record(data_t data);
     Record(uint8_t grade1, uint8_t grade2, uint8_t grade3);
     ~Record() = default;
 

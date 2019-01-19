@@ -26,7 +26,7 @@ enum class Action {
 };
 
 
-int main(int argc, char **argv) {
+auto main(int argc, char **argv) -> int{
 
     // Parse program arguments
     Action action = Action::NOT_SELECTED;

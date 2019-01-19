@@ -11,7 +11,8 @@
 #include "config.hh"
 
 namespace Sorter {
-    template<size_t _BufferSize> auto natural_merge_sort_2_1(Buffer<_BufferSize> &buf1) {
+    template<size_t _BufferSize>
+    auto natural_merge_sort_2_1(Buffer<_BufferSize> &buf1) -> std::tuple<uint, uint64_t, uint64_t, uint64_t, uint64_t> {
         using Buffer_t = Buffer<_BufferSize>;
         buf1.reset_and_set_mode(Buffer_t::Mode::READ);
         buf1.reset_io_counters();
@@ -26,7 +27,7 @@ namespace Sorter {
 
             // distribute
             bool out_buf_switch = false;
-            double prev_rec_avg{};
+            double prev_rec_avg = 0.0;
             auto rec = std::optional<Record>{};
             while ((rec = buf1.read_record())) {
                 if (rec->get_avg() >= prev_rec_avg) buffs[out_buf_switch].write_record(*rec);
@@ -45,45 +46,25 @@ namespace Sorter {
 
             // merge
             buf1.reset_and_set_mode(Buffer_t::Mode::WRITE);
-            for (auto &&buf:buffs) buf.reset_and_set_mode(Buffer_t::Mode::READ);
+            for (auto &&buf:buffs) { buf.reset_and_set_mode(Buffer_t::Mode::READ); }
+            auto last_written = std::optional<Record>{};
+            bool sorted = true;
             auto a = buffs[0].read_record();
             auto b = buffs[1].read_record();
-            auto prev_a = std::optional<Record>{};
-            auto prev_b = std::optional<Record>{};
-            bool eor_a = false; // End Of Run
-            bool eor_b = false;
-            bool sorted = true;
             while (true) {
-                prev_a = a;
-                prev_b = b;
-                if (eor_a && eor_b) {
-                    sorted = eor_a = eor_b = false;
-                } else if (a && !eor_a && b && !eor_b) {
-                    if (a->get_avg() < b->get_avg()) {
-                        buf1.write_record(*a);
-                        a = buffs[0].read_record();
-                        if (a->get_avg() < prev_a->get_avg()) { eor_a = true; }
-                    } else {
-                        buf1.write_record(*b);
-                        b = buffs[1].read_record();
-                        if (b->get_avg() < prev_b->get_avg()) { eor_b = true; }
-                    }
-                } else if (a && !eor_a) {
-                    buf1.write_record(*a);
-                    a = buffs[0].read_record();
-                    if (a->get_avg() < prev_a->get_avg()) { eor_a = true; }
-                } else if (b && !eor_b) {
-                    buf1.write_record(*b);
-                    b = buffs[1].read_record();
-                    if (b->get_avg() < prev_b->get_avg()) { eor_b = true; }
-                } else if (a) {
-                    sorted = eor_a = false;
-                } else if (b) {
-                    sorted = eor_b = false;
-                } else {
-                    break;
+                if (!(a || b)) { break; }
+                if (a && (!b || a <= b)) { // if a < b -> write a and get next from buf 0
+                    if (last_written && last_written > a) sorted = false;
+                    buf1.write_record(*(last_written = std::exchange(a, buffs[0].read_record())));
+                    continue;
+                }
+                if (b && (!a || a > b)) { // if a > b write b and get next from buf 1;
+                    if (last_written && last_written > b) sorted = false;
+                    buf1.write_record(*(last_written = std::exchange(b, buffs[1].read_record())));
                 }
             }
+
+
             ++iter_counter;
             if (sorted) break;
         }
@@ -93,8 +74,7 @@ namespace Sorter {
             buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY);
         });
 
-        return std::tuple{
-                iter_counter,
+        return {iter_counter,
                 buf1.get_disk_r_count() + buffs[0].get_disk_r_count() + buffs[1].get_disk_r_count(),
                 buf1.get_disk_w_count() + buffs[0].get_disk_w_count() + buffs[1].get_disk_w_count(),
                 buf1.get_rec_r_count() + buffs[0].get_rec_r_count() + buffs[1].get_rec_r_count(),

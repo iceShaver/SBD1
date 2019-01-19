@@ -17,12 +17,12 @@ namespace Measurements {
         using Buffer_t = Buffer<Config::BUFFER_SIZE>;
 
         struct separator final : std::numpunct<char> {
-            std::string do_grouping() const override { return "\03"; }
-            char do_thousands_sep() const override { return ' '; }
+            auto do_grouping() const -> std::string override { return "\03"; }
+            auto do_thousands_sep() const -> char override { return ' '; }
         };
     }
 
-    void io() {
+    auto io() -> void {
         using std::cout, std::endl, std::setw;
         // set_size, iters, disk_reads, disk_writes, rec_reads, rec_writes
         auto results = std::vector<std::tuple<uint64_t, uint64_t, uint64_t, uint64_t, uint64_t>>();

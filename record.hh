@@ -36,17 +36,21 @@ public:
     ~Record() = default;
 
 
-    uint64_t get_student_id() const;
-    uint8_t get_grade(int gradeNumber) const;
-    double get_avg() const { return avg; }
-    std::array<uint8_t, sizeof(data_t)> to_bytes() const;
-    friend std::ostream &operator<<(std::ostream &os, const Record &record);
+    auto get_student_id() const -> uint64_t;
+    auto get_grade(int gradeNumber) const -> uint8_t;
+    auto get_avg() const -> double { return avg; }
+    auto to_bytes() const -> std::array<uint8_t, sizeof(data_t)>;
 
-    static Record random();
+    auto operator<(Record const &rhs) const -> bool { return avg < rhs.avg; }
+    auto operator>(Record const &rhs) const -> bool { return rhs < *this; }
+    auto operator<=(Record const &rhs) const -> bool { return !(rhs < *this); }
+    auto operator>=(Record const &rhs) const -> bool { return !(*this < rhs); }
+    static auto random() -> Record;
 private:
     Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3);
+    auto calc_avg() -> void;
 
-    void calc_avg();
+    friend auto operator<<(std::ostream &os, const Record &record) -> std::ostream &;
 
     data_t data;
     float avg;

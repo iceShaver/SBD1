@@ -9,19 +9,13 @@
 #include <cmath>
 #include <iomanip>
 
-uint8_t Record::get_grade(int gradeNumber) const {
+auto Record::get_grade(int gradeNumber) const -> uint8_t {
     if (gradeNumber <= GRADES_NUMBER && gradeNumber > 0)
         return static_cast<uint8_t>(data >> (3 - gradeNumber) * 8);
     throw std::invalid_argument("gradeNumber has to be <1, 3>");
 }
 
 Record::Record(data_t data) : data(data) { calc_avg(); }
-
-std::array<uint8_t, sizeof(Record::data_t)> Record::to_bytes() const {
-    auto result = std::array<uint8_t, sizeof(data_t)>();
-    *reinterpret_cast<data_t *>(result.data()) = data;
-    return result;
-}
 
 Record::Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grade3) {
     if (student_id >= std::pow(2, 40))
@@ -35,13 +29,19 @@ Record::Record(uint64_t student_id, uint8_t grade1, uint8_t grade2, uint8_t grad
 
 Record::Record(uint8_t grade1, uint8_t grade2, uint8_t grade3) : Record(record_id_counter++, grade1, grade2, grade3) {}
 
-void Record::calc_avg() {
+auto Record::to_bytes() const -> std::array<uint8_t, sizeof(data_t)> {
+    auto result = std::array<uint8_t, sizeof(data_t)>();
+    *reinterpret_cast<data_t *>(result.data()) = data;
+    return result;
+}
+
+auto Record::calc_avg() -> void {
     avg = 0;
     for (int i = 1; i <= GRADES_NUMBER; ++i) avg += get_grade(i);
     avg /= (double) GRADES_NUMBER;
 }
 
-std::ostream &operator<<(std::ostream &os, const Record &record) {
+auto operator<<(std::ostream &os, const Record &record) -> std::ostream & {
     auto col_width = 20;
     return os << std::setw(col_width) << record.get_student_id()
               << std::setw(col_width) << +record.get_grade(1)
@@ -51,8 +51,8 @@ std::ostream &operator<<(std::ostream &os, const Record &record) {
               << std::fixed << record.get_avg();
 }
 
-uint64_t Record::get_student_id() const { return data >> 24; }
+auto Record::get_student_id() const -> uint64_t { return data >> 24; }
 
-Record Record::random() {
+auto Record::random() -> Record {
     return Record{static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen)), static_cast<uint8_t>(uid(gen))};
 }

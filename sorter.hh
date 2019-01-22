@@ -9,6 +9,7 @@
 #include <cstddef>
 #include "buffer.hh"
 #include "config.hh"
+#include "terminal.hh"
 
 namespace Sorter {
     template<size_t _BufferSize>
@@ -26,18 +27,21 @@ namespace Sorter {
             for (auto &&buf:buffs) buf.reset_and_set_mode(Buffer_t::Mode::WRITE);
 
             // distribute
-            bool out_buf_switch = false;
-            double prev_rec_avg = 0.0;
-            auto rec = std::optional<Record>{};
-            while ((rec = buf1.read_record())) {
-                if (rec->get_avg() >= prev_rec_avg) buffs[out_buf_switch].write_record(*rec);
-                else buffs[out_buf_switch = !out_buf_switch].write_record(*rec);
-                prev_rec_avg = rec->get_avg();
+            {
+                bool out_buf_switch = false;
+                double prev_rec_avg = 0.0;
+                auto rec = std::optional<Record>{};
+                while ((rec = buf1.read_record())) {
+                    if (rec->get_avg() >= prev_rec_avg) buffs[out_buf_switch].write_record(*rec);
+                    else buffs[out_buf_switch = !out_buf_switch].write_record(*rec);
+                    prev_rec_avg = rec->get_avg();
+                }
             }
-
             debug([&] {
+                Terminal::set_color(Terminal::Color::FG_RED);
                 std::cout << "Buffer 1: ";
                 buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY);
+                Terminal::set_color(Terminal::Color::FG_DEFAULT);
                 std::cout << "Buffer 2: ";
                 buffs[0].print_all_records(Buffer_t::PrintMode::AVG_ONLY);
                 std::cout << "Buffer 3: ";
@@ -45,33 +49,38 @@ namespace Sorter {
             });
 
             // merge
+            bool eor_a = false; // End Of Run
+            bool eor_b = false; // End Of Run
             buf1.reset_and_set_mode(Buffer_t::Mode::WRITE);
             for (auto &&buf:buffs) { buf.reset_and_set_mode(Buffer_t::Mode::READ); }
-            auto last_written = std::optional<Record>{};
             bool sorted = true;
             auto a = buffs[0].read_record();
             auto b = buffs[1].read_record();
-            while (true) {
-                if (!(a || b)) { break; }
-                if (a && (!b || a <= b)) { // if a < b -> write a and get next from buf 0
-                    if (last_written && last_written > a) sorted = false;
-                    buf1.write_record(*(last_written = std::exchange(a, buffs[0].read_record())));
+
+            while (a || b) {
+                if (eor_a && eor_b) { eor_a = eor_b = false; }
+                if (a && (!b || (!eor_a && (a < b || eor_b)))) {
+                    buf1.write_record(*a);
+                    auto prev = std::exchange(a, buffs[0].read_record());
+                    if (a && a < prev) { eor_a = true, sorted = false; }
                     continue;
                 }
-                if (b && (!a || a > b)) { // if a > b write b and get next from buf 1;
-                    if (last_written && last_written > b) sorted = false;
-                    buf1.write_record(*(last_written = std::exchange(b, buffs[1].read_record())));
+                if (b && (!a || (!eor_b && (a >= b || eor_a)))) {
+                    buf1.write_record(*b);
+                    auto prev = std::exchange(b, buffs[1].read_record());
+                    if (b && b < prev) { eor_b = true, sorted = false; }
                 }
             }
-
 
             ++iter_counter;
             if (sorted) break;
         }
 
         debug([&] {
+            Terminal::set_color(Terminal::Color::FG_RED);
             std::cout << "Buffer 1: ";
             buf1.print_all_records(Buffer_t::PrintMode::AVG_ONLY);
+            Terminal::set_color(Terminal::Color::FG_DEFAULT);
         });
 
         return {iter_counter,
